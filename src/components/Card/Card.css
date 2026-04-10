@@ -1,0 +1,94 @@
+.card {
+  width: 100px;
+  height: 140px;
+  background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+  border: 2px solid #333;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.card.selected {
+  border-color: #ffd700;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.card.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(100%);
+}
+
+.card.disabled:hover {
+  transform: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.card-suit {
+  font-size: 18px;
+}
+
+.card-suit.red {
+  color: #d32f2f;
+}
+
+.card-suit.black {
+  color: #333;
+}
+
+.card-number {
+  font-size: 16px;
+}
+
+.card-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.card-name {
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+}
+
+.card-footer {
+  font-size: 10px;
+  color: #666;
+  text-align: center;
+  border-top: 1px solid #ccc;
+  padding-top: 4px;
+}
+
+/* 卡牌类型颜色 */
+.card-type-basic {
+  background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+}
+
+.card-type-spell {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+}
+
+.card-type-equipment {
+  background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+}

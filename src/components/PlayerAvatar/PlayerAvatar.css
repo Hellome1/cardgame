@@ -1,0 +1,170 @@
+.player-avatar {
+  width: 120px;
+  padding: 10px;
+  background: linear-gradient(135deg, #4a4a4a 0%, #2c2c2c 100%);
+  border: 2px solid #666;
+  border-radius: 10px;
+  color: white;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.player-avatar:hover {
+  border-color: #999;
+}
+
+.player-avatar.current-turn {
+  border-color: #ffd700;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.player-avatar.selected {
+  border-color: #4caf50;
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+}
+
+.player-avatar.dead {
+  opacity: 0.5;
+  filter: grayscale(100%);
+}
+
+.player-avatar.human {
+  border-color: #2196f3;
+}
+
+.player-avatar.selectable {
+  border-color: #00bcd4;
+  box-shadow: 0 0 8px rgba(0, 188, 212, 0.4);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 5px rgba(0, 188, 212, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(0, 188, 212, 0.7);
+  }
+  100% {
+    box-shadow: 0 0 5px rgba(0, 188, 212, 0.4);
+  }
+}
+
+.avatar-image {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #666 0%, #444 100%);
+  margin: 0 auto 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  position: relative;
+}
+
+.avatar-image.lord-avatar {
+  background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.lord-crown {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  font-size: 16px;
+}
+
+.lord-badge {
+  font-size: 10px;
+  color: #ffd700;
+  margin-left: 4px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.player-name {
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.player-identity {
+  font-size: 12px;
+  color: #aaa;
+  margin-bottom: 4px;
+}
+
+.player-hp {
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.hp-heart {
+  color: #f44336;
+  font-size: 14px;
+}
+
+.hp-heart.lost {
+  color: #666;
+}
+
+.player-cards {
+  font-size: 12px;
+  color: #ccc;
+  margin-bottom: 6px;
+}
+
+/* 装备区 */
+.player-equipment {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.equipment-item {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: help;
+}
+
+.equipment-item.weapon {
+  background: rgba(255, 152, 0, 0.3);
+  border-left: 3px solid #ff9800;
+}
+
+.equipment-item.armor {
+  background: rgba(33, 150, 243, 0.3);
+  border-left: 3px solid #2196f3;
+}
+
+.equipment-item.horse {
+  background: rgba(76, 175, 80, 0.3);
+  border-left: 3px solid #4caf50;
+}
+
+.identity-lord {
+  color: #ffd700;
+}
+
+.identity-loyalist {
+  color: #4caf50;
+}
+
+.identity-rebel {
+  color: #f44336;
+}
+
+.identity-traitor {
+  color: #9c27b0;
+}
