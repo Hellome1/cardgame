@@ -16,19 +16,22 @@ export class CardManager {
   }
 
   private getSuitColor(suit: CardSuit): CardColor {
-    return suit === CardSuit.HEART || suit === CardSuit.DIAMOND 
-      ? CardColor.RED 
+    return suit === CardSuit.HEART || suit === CardSuit.DIAMOND
+      ? CardColor.RED
       : CardColor.BLACK;
   }
 
   // 创建一副标准牌
+  private deckCreateCount = 0;
+
   createStandardDeck(): Card[] {
-    // 重置计数器，确保每次创建新牌堆时ID从1开始
-    this.cardIdCounter = 0;
-    
+    this.deckCreateCount++;
+    console.log(`创建标准牌堆... (第 ${this.deckCreateCount} 次)`);
+    // 注意：不再重置计数器，确保所有牌的ID都是全局唯一的
+
     const deck: Card[] = [];
     const suits = [CardSuit.SPADE, CardSuit.HEART, CardSuit.CLUB, CardSuit.DIAMOND];
-    
+
     // 基本牌
     // 杀 (30张)
     for (let i = 0; i < 30; i++) {
@@ -188,6 +191,13 @@ export class CardManager {
         equipmentType: EquipmentType.HORSE_MINUS,
       });
     });
+
+    // 检查是否有重复的装备牌
+    const equipmentNames = deck.filter(c => c.type === CardType.EQUIPMENT).map(c => c.name);
+    const duplicates = equipmentNames.filter((item, index) => equipmentNames.indexOf(item) !== index);
+    if (duplicates.length > 0) {
+      console.error('牌堆中有重复的装备牌:', duplicates);
+    }
 
     return this.shuffle(deck);
   }

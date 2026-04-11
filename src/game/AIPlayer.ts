@@ -47,9 +47,23 @@ export class AIPlayer {
       // 每次循环重新获取最新状态
       const gameState = this.engine.getState();
       const currentPlayer = gameState.players.find(p => p.id === player.id);
-      if (!currentPlayer) {
-        console.log(`AI ${player.character.name} 无法获取当前状态`);
-        break;
+      
+      if (!currentPlayer || currentPlayer.isDead) break;
+      
+      // 检查是否处于响应阶段，如果是则等待响应完成
+      if (gameState.phase === GamePhase.RESPONSE && gameState.pendingResponse) {
+        console.log(`AI ${currentPlayer.character.name} 检测到响应阶段，等待响应完成...`);
+        // 等待响应完成（最多等待5秒）
+        let waitCount = 0;
+        let currentState = gameState;
+        while (currentState.phase === GamePhase.RESPONSE && waitCount < 50) {
+          await this.delay(100);
+          currentState = this.engine.getState();
+          waitCount++;
+        }
+        console.log(`AI ${currentPlayer.character.name} 响应阶段结束，继续出牌`);
+        // 响应完成后重新获取状态
+        continue;
       }
       
       const opponents = gameState.players.filter(p => p.id !== player.id && !p.isDead);
@@ -137,18 +151,6 @@ export class AIPlayer {
         playedCount++;
         if (cardToPlay.name === '杀') {
           this.attackCountThisTurn++;
-          // 使用杀后进入响应阶段，需要等待响应完成
-          const gameState = this.engine.getState();
-          if (gameState.phase === GamePhase.RESPONSE && gameState.pendingResponse) {
-            console.log(`AI ${currentPlayer.character.name} 使用杀后进入响应阶段，等待响应完成...`);
-            // 等待响应完成（最多等待5秒）
-            let waitCount = 0;
-            while (gameState.phase === GamePhase.RESPONSE && waitCount < 50) {
-              await this.delay(100);
-              waitCount++;
-            }
-            console.log(`AI ${currentPlayer.character.name} 响应阶段结束，继续出牌`);
-          }
         }
         await this.delay(1200); // 出牌间隔（增加延迟）
       } else {

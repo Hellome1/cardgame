@@ -1,5 +1,5 @@
-import { 
-  GameState, Player, Identity, GamePhase, 
+import {
+  GameState, Player, Identity, GamePhase,
   ActionRequest, GameAction, Card, CardType, BasicCardName, SpellCardName
 } from '../types/game';
 import { CardManager } from './CardManager';
@@ -13,29 +13,38 @@ export class GameEngine {
   private characterManager: CharacterManager;
   private actionListeners: ((action: ActionRequest) => void)[] = [];
   private aiPlayer: AIPlayer;
+  private static instanceCount = 0;
+  private static cardIdCounter = 0;
 
   constructor(playerCount: number = 4) {
+    GameEngine.instanceCount++;
+    console.log(`创建 GameEngine 实例... (第 ${GameEngine.instanceCount} 次)`);
     this.cardManager = CardManager.getInstance();
     this.characterManager = CharacterManager.getInstance();
     this.state = this.initializeGame(playerCount);
     this.aiPlayer = new AIPlayer(this);
   }
 
+  // 生成全局唯一的卡牌ID
+  static generateUniqueCardId(): string {
+    return `card_${Date.now()}_${++GameEngine.cardIdCounter}`;
+  }
+
   private initializeGame(playerCount: number): GameState {
     // 创建牌堆
     const deck = this.cardManager.createStandardDeck();
-    
+
     // 分配身份
     const identities = this.assignIdentities(playerCount);
-    
+
     // 随机选择武将
     const characters = this.characterManager.getRandomCharacters(playerCount);
-    
+
     // 创建玩家
     const players: Player[] = characters.map((char, index) => {
       const isAI = index !== 0; // 第一个玩家是人类，其他是AI
       const { cards } = this.cardManager.draw(deck, 4); // 初始4张牌
-      
+
       return {
         id: `player_${index}`,
         character: { ...char, hp: char.maxHp },
@@ -59,10 +68,10 @@ export class GameEngine {
 
   private assignIdentities(count: number): Identity[] {
     const identities: Identity[] = [];
-    
+
     // 主公
     identities.push(Identity.LORD);
-    
+
     // 根据人数分配其他身份
     if (count === 4) {
       identities.push(Identity.LOYALIST, Identity.REBEL, Identity.TRAITOR);
@@ -72,7 +81,7 @@ export class GameEngine {
       // 默认4人配置
       identities.push(Identity.LOYALIST, Identity.REBEL, Identity.TRAITOR);
     }
-    
+
     // 打乱身份
     return identities.sort(() => Math.random() - 0.5);
   }
@@ -96,13 +105,19 @@ export class GameEngine {
   // 处理回合
   private processTurn(): void {
     const currentPlayer = this.getCurrentPlayer();
-    
+
     if (currentPlayer.isDead) {
       this.nextTurn();
       return;
     }
 
     console.log(`processTurn: ${currentPlayer.character.name}, 阶段: ${this.state.phase}`);
+
+    // 检查游戏是否已经结束
+    if (this.state.phase === GamePhase.GAME_OVER) {
+      console.log('游戏已结束，停止游戏流程');
+      return;
+    }
 
     switch (this.state.phase) {
       case GamePhase.TURN_START:
@@ -118,10 +133,15 @@ export class GameEngine {
         // 如果是AI玩家，自动执行
         if (currentPlayer.isAI) {
           this.handleAIPlay(currentPlayer).then(() => {
-            // AI执行完后自动进入弃牌阶段
+            // AI执行完后，根据当前阶段决定下一步
             if (this.state.phase === GamePhase.PLAY) {
+              // 正常结束出牌阶段，进入弃牌阶段
               this.state.phase = GamePhase.DISCARD;
               this.processTurn();
+            } else if (this.state.phase === GamePhase.RESPONSE) {
+              // AI使用杀后进入响应阶段，需要等待响应完成
+              console.log('AI出牌后进入响应阶段，等待响应完成...');
+              // 不自动进入下一阶段，等待响应处理
             }
           });
         }
@@ -130,6 +150,13 @@ export class GameEngine {
         // 响应阶段：等待目标玩家响应（打出闪）
         // 这个阶段由玩家操作或AI自动响应触发，不需要自动处理
         console.log(`响应阶段: 等待 ${this.state.pendingResponse?.request.targetPlayerId} 响应`);
+        // 检查是否是AI目标，如果是则自动响应
+        if (this.state.pendingResponse) {
+          const targetPlayer = this.state.players.find(p => p.id === this.state.pendingResponse?.request.targetPlayerId);
+          if (targetPlayer?.isAI) {
+            this.processAIResponse(targetPlayer);
+          }
+        }
         break;
       case GamePhase.DISCARD:
         this.handleDiscard();
@@ -157,16 +184,42 @@ export class GameEngine {
   // 摸牌阶段
   private handleDraw(): void {
     const player = this.getCurrentPlayer();
-    const drawResult = this.cardManager.draw(this.state.deck, 2);
-    
+
+    // 检查牌堆是否足够，不够则从弃牌堆重新洗牌
+    if (this.state.deck.length < 2) {
+      this.reshuffleDiscardPile();
+    }
+
+    const drawCount = Math.min(2, this.state.deck.length);
+    const drawResult = this.cardManager.draw(this.state.deck, drawCount);
+
     player.handCards.push(...drawResult.cards);
     this.state.deck = drawResult.remaining;
-    
-    console.log(`${player.character.name} 摸了 ${drawResult.cards.length} 张牌，当前手牌: ${player.handCards.length}`);
-    
+
+    // 打印摸到的牌的具体信息
+    const cardNames = drawResult.cards.map(c => `【${c.name}】`).join('、');
+    console.log(`${player.character.name} 摸了 ${drawResult.cards.length} 张牌: ${cardNames}，当前手牌: ${player.handCards.length}`);
+
     this.state.phase = GamePhase.PLAY;
     // 继续执行下一阶段
     this.processTurn();
+  }
+
+  // 从弃牌堆重新洗牌到牌堆
+  private reshuffleDiscardPile(): void {
+    if (this.state.discardPile.length === 0) {
+      console.log('牌堆和弃牌堆都为空，无法摸牌');
+      return;
+    }
+
+    console.log(`牌堆不足，从弃牌堆重新洗牌 (${this.state.discardPile.length} 张)`);
+
+    // 将弃牌堆洗牌后加入牌堆
+    const shuffled = this.cardManager.shuffle(this.state.discardPile);
+    this.state.deck.push(...shuffled);
+    this.state.discardPile = [];
+
+    console.log(`重新洗牌完成，牌堆现在有 ${this.state.deck.length} 张牌`);
   }
 
   // 处理AI出牌
@@ -183,49 +236,44 @@ export class GameEngine {
       console.log(`出牌失败: 玩家不存在或已死亡`);
       return false;
     }
-    
+
     const cardIndex = player.handCards.findIndex(c => c.id === cardId);
     if (cardIndex === -1) {
       console.log(`出牌失败: 找不到卡牌 ${cardId}`);
       return false;
     }
-    
+
     const card = player.handCards[cardIndex];
     console.log(`${player.character.name} 尝试使用 ${card.name}`);
-    
+
     // 执行卡牌效果
     const effectSuccess = this.executeCardEffect(player, card, targetIds);
     if (!effectSuccess) {
       console.log(`出牌失败: 卡牌效果执行失败`);
       return false;
     }
-    
+
     // 移除手牌
     player.handCards.splice(cardIndex, 1);
-    
+
     // 装备牌会被executeEquipmentCard放到装备区，不需要再放到弃牌堆
     // 只有非装备牌才放到弃牌堆
     if (card.type !== CardType.EQUIPMENT) {
       this.state.discardPile.push(card);
     }
-    
+
     console.log(`${player.character.name} 成功使用了 ${card.name}`);
-    
-    // 通知监听器时带上卡牌名称（用于动画显示）
-    const actionWithCardName: ActionRequest = {
-      ...(targetIds ? { playerId, cardId, targetIds } : { playerId, cardId }),
-      action: GameAction.PLAY_CARD,
-      cardName: card.name,
-    };
-    this.actionListeners.forEach(listener => listener(actionWithCardName));
-    
+
+    // 注意：监听器由 executeAction 统一调用，避免重复通知
+    // 这里只返回成功状态
+
     return true;
   }
 
   // 执行卡牌效果
   private executeCardEffect(player: Player, card: Card, targetIds?: string[]): boolean {
     const targets = targetIds?.map(id => this.state.players.find(p => p.id === id)).filter(Boolean) as Player[] || [];
-    
+
     switch (card.type) {
       case CardType.BASIC:
         return this.executeBasicCard(player, card, targets);
@@ -246,16 +294,16 @@ export class GameEngine {
         if (targets.length === 0) return false;
         const target = targets[0];
         if (target.isDead) return false;
-        
+
         // 检查攻击距离
         const canAttack = DistanceCalculator.canAttack(player, target, this.state.players);
         if (!canAttack) {
           console.log(`${player.character.name} 无法攻击 ${target.character.name}，距离太远`);
           return false;
         }
-        
+
         console.log(`${player.character.name} 对 ${target.character.name} 使用杀，等待对方响应...`);
-        
+
         // 创建响应请求
         this.state.pendingResponse = {
           request: {
@@ -268,27 +316,27 @@ export class GameEngine {
           resolved: false,
           result: false,
         };
-        
+
         // 进入响应阶段
         this.state.phase = GamePhase.RESPONSE;
-        
+
         // 如果是AI被攻击，自动响应
         if (target.isAI) {
           this.processAIResponse(target);
         }
-        
+
         return true;
-        
+
       case BasicCardName.DODGE:
         // 闪：只能在响应时使用，不能直接打出
         return false;
-        
+
       case BasicCardName.PEACH:
         // 桃：回复1点体力
         if (player.character.hp >= player.character.maxHp) return false;
         this.heal(player.id, 1);
         return true;
-        
+
       default:
         return false;
     }
@@ -305,7 +353,7 @@ export class GameEngine {
         // 简化版：目标受到1点伤害
         this.dealDamage(player.id, duelTarget.id, 1);
         return true;
-        
+
       case SpellCardName.FIRE_ATTACK:
         // 火攻：对目标造成1点伤害
         if (targets.length === 0) return false;
@@ -313,41 +361,126 @@ export class GameEngine {
         if (fireTarget.isDead) return false;
         this.dealDamage(player.id, fireTarget.id, 1);
         return true;
-        
+
       case SpellCardName.STEAL:
         // 顺手牵羊：获得目标一张牌（距离限制为1）
         if (targets.length === 0) return false;
         const stealTarget = targets[0];
-        if (stealTarget.isDead || stealTarget.handCards.length === 0) return false;
-        
+        if (stealTarget.isDead) return false;
+
         // 检查距离限制（顺手牵羊距离为1）
         const stealDistance = DistanceCalculator.calculateDistance(player, stealTarget, this.state.players);
         if (stealDistance > 1) {
           console.log(`${player.character.name} 无法对 ${stealTarget.character.name} 使用顺手牵羊，距离太远（距离: ${stealDistance}）`);
           return false;
         }
-        
-        // 简化版：随机获得目标一张手牌
-        const stolenCard = stealTarget.handCards.pop();
-        if (stolenCard) {
-          player.handCards.push(stolenCard);
-          console.log(`${player.character.name} 从 ${stealTarget.character.name} 处获得了 ${stolenCard.name}`);
+
+        // 获取目标所有可偷的牌（手牌 + 装备区）
+        const availableCards: { type: 'hand' | 'equipment', key?: string, card: Card }[] = [];
+
+        // 添加手牌
+        stealTarget.handCards.forEach(card => {
+          availableCards.push({ type: 'hand', card });
+        });
+
+        // 添加装备区的牌
+        if (stealTarget.equipment.weapon) {
+          availableCards.push({ type: 'equipment', key: 'weapon', card: stealTarget.equipment.weapon });
         }
+        if (stealTarget.equipment.armor) {
+          availableCards.push({ type: 'equipment', key: 'armor', card: stealTarget.equipment.armor });
+        }
+        if (stealTarget.equipment.horsePlus) {
+          availableCards.push({ type: 'equipment', key: 'horsePlus', card: stealTarget.equipment.horsePlus });
+        }
+        if (stealTarget.equipment.horseMinus) {
+          availableCards.push({ type: 'equipment', key: 'horseMinus', card: stealTarget.equipment.horseMinus });
+        }
+
+        if (availableCards.length === 0) {
+          console.log(`${stealTarget.character.name} 没有可以偷的牌`);
+          return false;
+        }
+
+        // 随机选择一张牌
+        const randomIndex = Math.floor(Math.random() * availableCards.length);
+        const stolenItem = availableCards[randomIndex];
+
+        if (stolenItem.type === 'hand') {
+          // 从手牌中移除
+          const cardIndex = stealTarget.handCards.findIndex(c => c.id === stolenItem.card.id);
+          if (cardIndex !== -1) {
+            stealTarget.handCards.splice(cardIndex, 1);
+          }
+        } else if (stolenItem.type === 'equipment' && stolenItem.key) {
+          // 从装备区移除
+          stealTarget.equipment[stolenItem.key as keyof Player['equipment']] = undefined;
+        }
+
+        // 给偷来的卡牌生成新的唯一ID，避免重复key问题
+        const stolenCard = {
+          ...stolenItem.card,
+          id: GameEngine.generateUniqueCardId(),
+        };
+
+        // 加入自己的手牌
+        player.handCards.push(stolenCard);
+        console.log(`${player.character.name} 从 ${stealTarget.character.name} 处获得了 ${stolenCard.name}`);
         return true;
-        
+
       case SpellCardName.DISMANTLE:
         // 过河拆桥：弃置目标一张牌
         if (targets.length === 0) return false;
         const dismantleTarget = targets[0];
-        if (dismantleTarget.isDead || dismantleTarget.handCards.length === 0) return false;
-        // 简化版：随机弃置目标一张手牌
-        const dismantledCard = dismantleTarget.handCards.pop();
-        if (dismantledCard) {
-          this.state.discardPile.push(dismantledCard);
-          console.log(`${player.character.name} 弃置了 ${dismantleTarget.character.name} 的 ${dismantledCard.name}`);
+        if (dismantleTarget.isDead) return false;
+
+        // 获取目标所有可弃置的牌（手牌 + 装备区）
+        const dismantleCards: { type: 'hand' | 'equipment', key?: string, card: Card }[] = [];
+
+        // 添加手牌
+        dismantleTarget.handCards.forEach(card => {
+          dismantleCards.push({ type: 'hand', card });
+        });
+
+        // 添加装备区的牌
+        if (dismantleTarget.equipment.weapon) {
+          dismantleCards.push({ type: 'equipment', key: 'weapon', card: dismantleTarget.equipment.weapon });
         }
+        if (dismantleTarget.equipment.armor) {
+          dismantleCards.push({ type: 'equipment', key: 'armor', card: dismantleTarget.equipment.armor });
+        }
+        if (dismantleTarget.equipment.horsePlus) {
+          dismantleCards.push({ type: 'equipment', key: 'horsePlus', card: dismantleTarget.equipment.horsePlus });
+        }
+        if (dismantleTarget.equipment.horseMinus) {
+          dismantleCards.push({ type: 'equipment', key: 'horseMinus', card: dismantleTarget.equipment.horseMinus });
+        }
+
+        if (dismantleCards.length === 0) {
+          console.log(`${dismantleTarget.character.name} 没有可以弃置的牌`);
+          return false;
+        }
+
+        // 随机选择一张牌弃置
+        const dismantleIndex = Math.floor(Math.random() * dismantleCards.length);
+        const dismantleItem = dismantleCards[dismantleIndex];
+
+        if (dismantleItem.type === 'hand') {
+          // 从手牌中移除
+          const cardIndex = dismantleTarget.handCards.findIndex(c => c.id === dismantleItem.card.id);
+          if (cardIndex !== -1) {
+            dismantleTarget.handCards.splice(cardIndex, 1);
+          }
+        } else if (dismantleItem.type === 'equipment' && dismantleItem.key) {
+          // 从装备区移除
+          dismantleTarget.equipment[dismantleItem.key as keyof Player['equipment']] = undefined;
+        }
+
+        // 放入弃牌堆
+        this.state.discardPile.push(dismantleItem.card);
+        console.log(`${player.character.name} 弃置了 ${dismantleTarget.character.name} 的 ${dismantleItem.card.name}`);
         return true;
-        
+
       case SpellCardName.PEACH_GARDEN:
         // 桃园结义：所有角色回复1点体力
         this.state.players.forEach(p => {
@@ -356,7 +489,7 @@ export class GameEngine {
           }
         });
         return true;
-        
+
       case SpellCardName.ARCHERY:
         // 万箭齐发：所有其他角色需出闪，否则受到1点伤害
         this.state.players.forEach(p => {
@@ -366,7 +499,7 @@ export class GameEngine {
           }
         });
         return true;
-        
+
       case SpellCardName.SAVAGE:
         // 南蛮入侵：所有其他角色需出杀，否则受到1点伤害
         this.state.players.forEach(p => {
@@ -376,7 +509,7 @@ export class GameEngine {
           }
         });
         return true;
-        
+
       case SpellCardName.DRAW_TWO:
         // 无中生有：摸两张牌
         const { cards } = this.cardManager.draw(this.state.deck, 2);
@@ -384,7 +517,7 @@ export class GameEngine {
         this.state.deck = this.state.deck.slice(2);
         console.log(`${player.character.name} 摸了 ${cards.length} 张牌`);
         return true;
-        
+
       default:
         return false;
     }
@@ -394,15 +527,33 @@ export class GameEngine {
   private executeEquipmentCard(player: Player, card: Card): boolean {
     // 将装备放入装备区
     if (!card.equipmentType) return false;
-    
-    // 如果有旧装备，先弃置
-    const oldEquipment = player.equipment[card.equipmentType];
-    if (oldEquipment) {
-      this.state.discardPile.push(oldEquipment);
+
+    // 将 EquipmentType 映射到 equipment 对象的属性名
+    const equipmentKeyMap: Record<string, keyof Player['equipment']> = {
+      'weapon': 'weapon',
+      'armor': 'armor',
+      'horse_plus': 'horsePlus',
+      'horse_minus': 'horseMinus',
+    };
+
+    const equipmentKey = equipmentKeyMap[card.equipmentType];
+    if (!equipmentKey) return false;
+
+    // 检查是否已经装备了同一张牌（防止重复装备）
+    const currentEquipment = player.equipment[equipmentKey];
+    if (currentEquipment && currentEquipment.id === card.id) {
+      console.log(`${player.character.name} 已经装备了 ${card.name}，无需重复装备`);
+      return false;
     }
-    
+
+    // 如果有旧装备，先弃置
+    if (currentEquipment) {
+      this.state.discardPile.push(currentEquipment);
+      console.log(`${player.character.name} 弃置了旧装备 ${currentEquipment.name}`);
+    }
+
     // 装备新牌
-    player.equipment[card.equipmentType] = card;
+    player.equipment[equipmentKey] = card;
     console.log(`${player.character.name} 装备了 ${card.name}`);
     return true;
   }
@@ -411,12 +562,12 @@ export class GameEngine {
   private handleDiscard(): void {
     const player = this.getCurrentPlayer();
     const maxCards = player.character.hp;
-    
+
     console.log(`弃牌阶段: ${player.character.name}, 手牌${player.handCards.length}, 上限${maxCards}`);
-    
+
     if (player.handCards.length > maxCards) {
       const cardsToDiscard = player.handCards.length - maxCards;
-      
+
       if (player.isAI) {
         console.log(`AI ${player.character.name} 自动弃牌 ${cardsToDiscard} 张`);
         // AI自动弃牌 - 优先弃基本牌
@@ -424,7 +575,7 @@ export class GameEngine {
           const priority = { [CardType.BASIC]: 0, [CardType.SPELL]: 1, [CardType.EQUIPMENT]: 2 };
           return priority[a.type] - priority[b.type];
         });
-        
+
         const cardsToRemove = sortedCards.slice(0, cardsToDiscard);
         cardsToRemove.forEach(card => {
           const index = player.handCards.findIndex(c => c.id === card.id);
@@ -434,13 +585,13 @@ export class GameEngine {
             console.log(`${player.character.name} 弃置了 ${removedCard.name}`);
           }
         });
-        
+
         // AI弃牌完成后通知监听器（只通知一次）
         this.actionListeners.forEach(listener => listener({
           action: GameAction.DISCARD_CARD,
           playerId: player.id,
         }));
-        
+
         this.state.phase = GamePhase.TURN_END;
         this.processTurn();
       } else {
@@ -459,9 +610,9 @@ export class GameEngine {
   discardCards(playerId: string, cardIds: string[]): boolean {
     const player = this.state.players.find(p => p.id === playerId);
     if (!player) return false;
-    
+
     let hasDiscarded = false;
-    
+
     cardIds.forEach(cardId => {
       const index = player.handCards.findIndex(c => c.id === cardId);
       if (index !== -1) {
@@ -471,7 +622,7 @@ export class GameEngine {
         hasDiscarded = true;
       }
     });
-    
+
     // 检查是否还需要弃牌
     const maxCards = player.character.hp;
     if (player.handCards.length <= maxCards) {
@@ -479,7 +630,7 @@ export class GameEngine {
       this.state.phase = GamePhase.TURN_END;
       this.processTurn();
     }
-    
+
     return true;
   }
 
@@ -487,24 +638,37 @@ export class GameEngine {
   private handleTurnEnd(): void {
     const player = this.getCurrentPlayer();
     console.log(`回合结束: ${player.character.name}`);
+
+    // 检查游戏是否已经结束
+    if (this.state.phase === GamePhase.GAME_OVER) {
+      console.log('游戏已结束，不再进入下一回合');
+      return;
+    }
+
     this.nextTurn();
   }
 
   // 下一回合
   private nextTurn(): void {
+    // 检查游戏是否已经结束
+    if (this.state.phase === GamePhase.GAME_OVER) {
+      console.log('游戏已结束，不再切换回合');
+      return;
+    }
+
     const currentPlayer = this.getCurrentPlayer();
     console.log(`${currentPlayer.character.name} 的回合结束，进入下一回合`);
-    
+
     do {
       this.state.currentPlayerIndex = (this.state.currentPlayerIndex + 1) % this.state.players.length;
       if (this.state.currentPlayerIndex === 0) {
         this.state.round++;
       }
     } while (this.getCurrentPlayer().isDead);
-    
+
     const nextPlayer = this.getCurrentPlayer();
     console.log(`下一回合: ${nextPlayer.character.name}`);
-    
+
     this.state.phase = GamePhase.TURN_START;
     this.processTurn();
   }
@@ -513,7 +677,7 @@ export class GameEngine {
   endPlayPhase(playerId: string): boolean {
     const player = this.getCurrentPlayer();
     if (player.id !== playerId) return false;
-    
+
     this.state.phase = GamePhase.DISCARD;
     this.processTurn();
     return true;
@@ -524,13 +688,13 @@ export class GameEngine {
     const fromPlayer = this.state.players.find(p => p.id === fromId);
     const target = this.state.players.find(p => p.id === toId);
     if (!target || target.isDead) return;
-    
+
     target.character.hp -= amount;
     console.log(`${target.character.name} 受到 ${amount} 点伤害，剩余体力: ${target.character.hp}`);
-    
+
     // 触发受伤技能（简化版）
     this.triggerSkill(target, 'ON_DAMAGE', { fromPlayer, amount });
-    
+
     if (target.character.hp <= 0) {
       console.log(`${target.character.name} 体力降至0或以下，准备处理死亡`);
       this.handleDeath(target);
@@ -551,11 +715,11 @@ export class GameEngine {
   heal(playerId: string, amount: number): void {
     const player = this.state.players.find(p => p.id === playerId);
     if (!player || player.isDead) return;
-    
+
     const oldHp = player.character.hp;
     player.character.hp = Math.min(player.character.hp + amount, player.character.maxHp);
     const healedAmount = player.character.hp - oldHp;
-    
+
     if (healedAmount > 0) {
       // 触发治疗技能
       this.triggerSkill(player, 'ON_HEAL', { amount: healedAmount });
@@ -566,11 +730,11 @@ export class GameEngine {
   private handleDeath(player: Player): void {
     player.isDead = true;
     console.log(`${player.character.name} 阵亡！`);
-    
+
     // 弃置所有牌
     this.state.discardPile.push(...player.handCards);
     player.handCards = [];
-    
+
     // 弃置装备区的装备
     if (player.equipment.weapon) {
       this.state.discardPile.push(player.equipment.weapon);
@@ -588,7 +752,7 @@ export class GameEngine {
       this.state.discardPile.push(player.equipment.horseMinus);
       player.equipment.horseMinus = undefined;
     }
-    
+
     // 检查游戏结束
     this.checkGameOver();
   }
@@ -597,15 +761,15 @@ export class GameEngine {
   private checkGameOver(): void {
     const alivePlayers = this.state.players.filter(p => !p.isDead);
     const aliveIdentities = alivePlayers.map(p => p.identity);
-    
+
     console.log(`检查游戏结束: 存活玩家=${alivePlayers.length}, 存活身份=${aliveIdentities}`);
-    
+
     // 主公死亡
     const lordPlayer = this.state.players.find(p => p.identity === Identity.LORD);
     const lordDead = lordPlayer?.isDead;
-    
+
     console.log(`主公=${lordPlayer?.character.name}, isDead=${lordDead}`);
-    
+
     if (lordDead) {
       console.log('主公死亡，检查胜利者...');
       // 如果内奸是唯一存活的，内奸胜利
@@ -634,8 +798,16 @@ export class GameEngine {
 
   // 执行动作
   executeAction(action: ActionRequest): boolean {
+    // 在执行动作前获取卡牌名称（因为执行后卡牌可能从手牌移除）
+    let cardName: string | undefined = action.cardName;
+    if (action.action === GameAction.PLAY_CARD && action.cardId && !cardName) {
+      const player = this.state.players.find(p => p.id === action.playerId);
+      const card = player?.handCards.find(c => c.id === action.cardId);
+      cardName = card?.name;
+    }
+
     let success = false;
-    
+
     switch (action.action) {
       case GameAction.PLAY_CARD:
         if (action.cardId) {
@@ -651,11 +823,16 @@ export class GameEngine {
         }
         break;
     }
-    
+
     if (success) {
-      this.actionListeners.forEach(listener => listener(action));
+      // 补充 cardName 到 action 中，用于动画显示
+      const actionWithCardName: ActionRequest = {
+        ...action,
+        cardName: cardName,
+      };
+      this.actionListeners.forEach(listener => listener(actionWithCardName));
     }
-    
+
     return success;
   }
 
@@ -681,7 +858,7 @@ export class GameEngine {
       console.log(`respondToAttack 失败: 找不到玩家`);
       return false;
     }
-    
+
     console.log(`respondToAttack: ${targetPlayer.character.name} ${cardId ? '打出响应牌' : '不响应'}`);
 
     if (cardId) {
@@ -698,8 +875,9 @@ export class GameEngine {
         this.state.discardPile.push(playedCard);
       }
 
-      console.log(`${targetPlayer.character.name} 打出了【${responseCard.name}】，抵消了【${pendingResponse.request.cardName}】`);
-      
+      const logMessage = `${targetPlayer.character.name} 打出了【${responseCard.name}】，抵消了【${pendingResponse.request.cardName}】`;
+      console.log(logMessage);
+
       pendingResponse.resolved = true;
       pendingResponse.result = true;
       pendingResponse.responseCardId = cardId;
@@ -707,19 +885,24 @@ export class GameEngine {
       // 响应成功，不造成伤害，返回出牌阶段
       this.state.pendingResponse = undefined;
       this.state.phase = GamePhase.PLAY;
-      
-      // 通知监听器响应完成
+
+      // 触发监听器通知 UI 更新（标记为响应动作）
       this.actionListeners.forEach(listener => listener({
         action: GameAction.PLAY_CARD,
         playerId: targetPlayer.id,
         cardId: cardId,
+        cardName: responseCard.name,
+        targetIds: [sourcePlayer.id],
+        isResponse: true, // 标记为响应动作
+        logMessage: logMessage, // 添加日志消息
       }));
-      
+
       return true;
     } else {
       // 玩家选择不响应
-      console.log(`${targetPlayer.character.name} 没有打出【${pendingResponse.request.responseCardName}】，受到${pendingResponse.request.damage}点伤害`);
-      
+      const logMessage = `${targetPlayer.character.name} 没有打出【${pendingResponse.request.responseCardName}】，受到${pendingResponse.request.damage}点伤害`;
+      console.log(logMessage);
+
       pendingResponse.resolved = true;
       pendingResponse.result = false;
 
@@ -729,13 +912,17 @@ export class GameEngine {
       // 清除响应状态，返回出牌阶段
       this.state.pendingResponse = undefined;
       this.state.phase = GamePhase.PLAY;
-      
-      // 通知监听器响应完成（不传cardId表示不响应）
+
+      // 触发监听器通知 UI 更新（标记为响应动作）
       this.actionListeners.forEach(listener => listener({
         action: GameAction.PLAY_CARD,
         playerId: targetPlayer.id,
+        cardName: pendingResponse.request.cardName,
+        targetIds: [sourcePlayer.id],
+        isResponse: true, // 标记为响应动作
+        logMessage: logMessage, // 添加日志消息
       }));
-      
+
       return true;
     }
   }
@@ -756,15 +943,8 @@ export class GameEngine {
       if (Math.random() < 0.8) {
         setTimeout(() => {
           console.log(`AI ${targetPlayer.character.name} 选择打出【${responseCard.name}】`);
-          const success = this.respondToAttack(targetPlayer.id, responseCard.id);
-          if (success) {
-            // 通知监听器
-            this.actionListeners.forEach(listener => listener({
-              action: GameAction.PLAY_CARD,
-              playerId: targetPlayer.id,
-              cardId: responseCard.id,
-            }));
-          }
+          // 注意：监听器由 store.respondToAttack 统一处理，避免重复通知
+          this.respondToAttack(targetPlayer.id, responseCard.id);
         }, 1000);
         return;
       } else {
@@ -777,6 +957,7 @@ export class GameEngine {
     // AI不响应或没有响应牌
     setTimeout(() => {
       console.log(`AI ${targetPlayer.character.name} 不响应，准备受到伤害`);
+      // 注意：监听器由 store.respondToAttack 统一处理，避免重复通知
       this.respondToAttack(targetPlayer.id);
     }, 1000);
   }

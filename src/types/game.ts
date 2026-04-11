@@ -203,4 +203,6 @@ export interface ActionRequest {
   cardName?: string; // 用于动画显示
   skillId?: string;
   targetIds?: string[];
+  isResponse?: boolean; // 标记是否是响应动作（如打出闪），不触发动画
+  logMessage?: string; // 用于游戏记录的日志消息
 }

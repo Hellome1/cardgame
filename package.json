@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "electron:dev": "electron .",
+    "electron:dev": "NODE_ENV=development electron .",
     "electron:build": "npm run build && electron-builder",
     "dist": "electron-builder"
   },
