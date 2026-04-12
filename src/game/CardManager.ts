@@ -2,7 +2,7 @@ import { Card, CardType, CardSuit, CardColor, BasicCardName, SpellCardName, Equi
 
 export class CardManager {
   private static instance: CardManager;
-  private cardIdCounter = 0;
+  private static cardIdCounter = 0;
 
   static getInstance(): CardManager {
     if (!CardManager.instance) {
@@ -12,7 +12,7 @@ export class CardManager {
   }
 
   private generateId(): string {
-    return `card_${++this.cardIdCounter}`;
+    return `card_${++CardManager.cardIdCounter}`;
   }
 
   private getSuitColor(suit: CardSuit): CardColor {
@@ -33,8 +33,8 @@ export class CardManager {
     const suits = [CardSuit.SPADE, CardSuit.HEART, CardSuit.CLUB, CardSuit.DIAMOND];
 
     // 基本牌
-    // 杀 (30张)
-    for (let i = 0; i < 30; i++) {
+    // 普通杀 (20张)
+    for (let i = 0; i < 20; i++) {
       const suit = suits[i % 4];
       deck.push({
         id: this.generateId(),
@@ -44,6 +44,36 @@ export class CardManager {
         number: (i % 13) + 1,
         color: this.getSuitColor(suit),
         description: '出牌阶段，对攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到1点伤害。',
+      });
+    }
+
+    // 雷杀 (5张) - 黑桃和梅花
+    const thunderSuits = [CardSuit.SPADE, CardSuit.CLUB];
+    for (let i = 0; i < 5; i++) {
+      const suit = thunderSuits[i % 2];
+      deck.push({
+        id: this.generateId(),
+        name: BasicCardName.THUNDER_ATTACK,
+        type: CardType.BASIC,
+        suit,
+        number: (i % 13) + 1,
+        color: CardColor.BLACK,
+        description: '出牌阶段，对攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到1点雷电伤害。',
+      });
+    }
+
+    // 火杀 (5张) - 红桃和方块
+    const fireSuits = [CardSuit.HEART, CardSuit.DIAMOND];
+    for (let i = 0; i < 5; i++) {
+      const suit = fireSuits[i % 2];
+      deck.push({
+        id: this.generateId(),
+        name: BasicCardName.FIRE_ATTACK_CARD,
+        type: CardType.BASIC,
+        suit,
+        number: (i % 13) + 1,
+        color: CardColor.RED,
+        description: '出牌阶段，对攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到1点火焰伤害。',
       });
     }
 
@@ -57,7 +87,7 @@ export class CardManager {
         suit,
         number: (i % 13) + 1,
         color: this.getSuitColor(suit),
-        description: '当你成为【杀】的目标时，可以打出一张【闪】来抵消该【杀】的效果。',
+        description: '当你成为【杀】、【雷杀】或【火杀】的目标时，可以打出一张【闪】来抵消该牌的效果。',
       });
     }
 
@@ -85,6 +115,7 @@ export class CardManager {
       { name: SpellCardName.ARCHERY, count: 1, desc: '出牌阶段，对所有其他角色使用。每名角色需打出一张【闪】，否则受到1点伤害。' },
       { name: SpellCardName.SAVAGE, count: 1, desc: '出牌阶段，对所有其他角色使用。每名角色需打出一张【杀】，否则受到1点伤害。' },
       { name: SpellCardName.DRAW_TWO, count: 4, desc: '出牌阶段，对你使用。摸两张牌。' },
+      { name: SpellCardName.NULLIFICATION, count: 4, desc: '在锦囊牌生效前，对一名角色使用的锦囊牌使用。抵消该锦囊牌对该角色的效果。' },
     ];
 
     spellCards.forEach(spell => {

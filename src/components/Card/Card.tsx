@@ -18,6 +18,16 @@ export const Card: React.FC<CardProps> = ({
   showDescription = false,
 }) => {
   const getCardTypeClass = () => {
+    // 根据卡牌名称返回特殊样式
+    if (card.name === '雷杀') {
+      return 'card-type-thunder';
+    }
+    if (card.name === '火杀') {
+      return 'card-type-fire';
+    }
+    if (card.name === '无懈可击') {
+      return 'card-type-nullification';
+    }
     switch (card.type) {
       case CardTypeEnum.BASIC:
         return 'card-type-basic';

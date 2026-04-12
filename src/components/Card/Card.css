@@ -92,3 +92,40 @@
 .card-type-equipment {
   background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
 }
+
+/* 雷杀 - 紫色雷电效果 */
+.card-type-thunder {
+  background: linear-gradient(135deg, #e8e0ff 0%, #c5b3ff 50%, #9c7cff 100%);
+  border-color: #7c4dff;
+  box-shadow: 0 0 8px rgba(124, 77, 255, 0.4);
+}
+
+.card-type-thunder .card-name {
+  color: #5e35b1;
+  text-shadow: 0 0 4px rgba(124, 77, 255, 0.5);
+}
+
+/* 火杀 - 红色火焰效果 */
+.card-type-fire {
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 50%, #ff8a80 100%);
+  border-color: #f44336;
+  box-shadow: 0 0 8px rgba(244, 67, 54, 0.4);
+}
+
+.card-type-fire .card-name {
+  color: #c62828;
+  text-shadow: 0 0 4px rgba(244, 67, 54, 0.5);
+}
+
+/* 无懈可击 - 金色效果 */
+.card-type-nullification {
+  background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 50%, #ffd54f 100%);
+  border-color: #ffc107;
+  box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
+}
+
+.card-type-nullification .card-name {
+  color: #f57f17;
+  font-weight: bold;
+  text-shadow: 0 0 4px rgba(255, 193, 7, 0.6);
+}

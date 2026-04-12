@@ -20,8 +20,35 @@
 }
 
 .player-avatar.selected {
-  border-color: #4caf50;
-  box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+  border-color: #00ff00;
+  border-width: 4px;
+  box-shadow: 
+    0 0 20px rgba(0, 255, 0, 1), 
+    0 0 40px rgba(0, 255, 0, 0.8),
+    0 0 60px rgba(0, 255, 0, 0.6),
+    inset 0 0 20px rgba(0, 255, 0, 0.3);
+  transform: scale(1.1);
+  animation: selected-pulse 0.8s infinite;
+  z-index: 100;
+}
+
+@keyframes selected-pulse {
+  0%, 100% {
+    box-shadow: 
+      0 0 20px rgba(0, 255, 0, 1), 
+      0 0 40px rgba(0, 255, 0, 0.8),
+      0 0 60px rgba(0, 255, 0, 0.6),
+      inset 0 0 20px rgba(0, 255, 0, 0.3);
+    transform: scale(1.1);
+  }
+  50% {
+    box-shadow: 
+      0 0 30px rgba(0, 255, 0, 1), 
+      0 0 60px rgba(0, 255, 0, 0.9),
+      0 0 90px rgba(0, 255, 0, 0.7),
+      inset 0 0 30px rgba(0, 255, 0, 0.5);
+    transform: scale(1.15);
+  }
 }
 
 .player-avatar.dead {
@@ -151,6 +178,18 @@
 .equipment-item.horse {
   background: rgba(76, 175, 80, 0.3);
   border-left: 3px solid #4caf50;
+}
+
+/* 马匹装备行 - 加一马和减一马放在一排 */
+.equipment-row.horses-row {
+  display: flex;
+  flex-direction: row;
+  gap: 3px;
+}
+
+.equipment-row.horses-row .equipment-item {
+  flex: 1;
+  min-width: 0;
 }
 
 .identity-lord {

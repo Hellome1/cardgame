@@ -93,22 +93,27 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
       <div className="player-equipment">
         {player.equipment.weapon && (
           <div className="equipment-item weapon" title={player.equipment.weapon.description}>
-            ⚔️ {player.equipment.weapon.name} (距离{player.equipment.weapon.range})
+            ⚔️ {player.equipment.weapon.suit}{player.equipment.weapon.number} {player.equipment.weapon.name} (距离{player.equipment.weapon.range})
           </div>
         )}
         {player.equipment.armor && (
           <div className="equipment-item armor" title={player.equipment.armor.description}>
-            🛡️ {player.equipment.armor.name}
+            🛡️ {player.equipment.armor.suit}{player.equipment.armor.number} {player.equipment.armor.name}
           </div>
         )}
-        {player.equipment.horsePlus && (
-          <div className="equipment-item horse horse-plus" title={player.equipment.horsePlus.description}>
-            🐴 +1马 ({player.equipment.horsePlus.name})
-          </div>
-        )}
-        {player.equipment.horseMinus && (
-          <div className="equipment-item horse horse-minus" title={player.equipment.horseMinus.description}>
-            🐴 -1马 ({player.equipment.horseMinus.name})
+        {/* 加一马和减一马放在一排 */}
+        {(player.equipment.horsePlus || player.equipment.horseMinus) && (
+          <div className="equipment-row horses-row">
+            {player.equipment.horsePlus && (
+              <div className="equipment-item horse horse-plus" title={player.equipment.horsePlus.description}>
+                🐴 {player.equipment.horsePlus.suit}{player.equipment.horsePlus.number} +1马 ({player.equipment.horsePlus.name})
+              </div>
+            )}
+            {player.equipment.horseMinus && (
+              <div className="equipment-item horse horse-minus" title={player.equipment.horseMinus.description}>
+                🐴 {player.equipment.horseMinus.suit}{player.equipment.horseMinus.number} -1马 ({player.equipment.horseMinus.name})
+              </div>
+            )}
           </div>
         )}
       </div>

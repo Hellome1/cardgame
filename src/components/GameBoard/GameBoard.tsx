@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { Card } from '../Card/Card';
 import { PlayerAvatar } from '../PlayerAvatar/PlayerAvatar';
-import { GamePhase, Identity, CardType, SpellCardName, BasicCardName } from '../../types/game';
+import { GamePhase, Identity, CardType, SpellCardName, BasicCardName, ResponseType } from '../../types/game';
 import { DistanceCalculator } from '../../game/DistanceCalculator';
 import './GameBoard.css';
 
@@ -68,6 +68,7 @@ export const GameBoard: React.FC = () => {
     isPaused,
     initGame,
     startGame,
+    resetGame,
     selectCard,
     selectTarget,
     clearTarget,
@@ -93,6 +94,14 @@ export const GameBoard: React.FC = () => {
   // 卡牌使用动画状态
   const [cardAnimation, setCardAnimation] = useState<CardAnimation | null>(null);
   const [linePosition, setLinePosition] = useState<{ start: { x: number, y: number }, end: { x: number, y: number } } | null>(null);
+
+  // 牌堆查看弹窗状态
+  const [showDeckModal, setShowDeckModal] = useState(false);
+  const [deckSortBy, setDeckSortBy] = useState<'original' | 'type'>('original');
+
+  // 弃牌堆查看弹窗状态
+  const [showDiscardModal, setShowDiscardModal] = useState(false);
+  const [discardSortBy, setDiscardSortBy] = useState<'original' | 'type'>('original');
 
   // 缩放比例状态
   const [scale, setScale] = useState(1);
@@ -285,10 +294,11 @@ export const GameBoard: React.FC = () => {
     return () => clearTimeout(clearTimer);
   }, [cardAnimation]);
 
-  // 在开始界面自动清空日志（只执行一次）
+  // 在开始界面自动清空日志
   useEffect(() => {
-    if (!isGameStarted && !hasAutoClearedLogs) {
-      hasAutoClearedLogs = true;
+    if (!isGameStarted) {
+      // 当回到开始界面时，重置标志并清空日志
+      hasAutoClearedLogs = false;
       const autoClearLogs = async () => {
         try {
           // @ts-ignore - 动态导入 Logger
@@ -306,27 +316,12 @@ export const GameBoard: React.FC = () => {
   }, [isGameStarted]);
 
   if (!isGameStarted) {
-    const handleClearLogs = async () => {
-      try {
-        // @ts-ignore - 动态导入 Logger
-        const { logger } = await import('../../utils/Logger');
-        await logger.clearAllLogs();
-        alert('日志已清空');
-      } catch (e) {
-        console.error('清空日志失败:', e);
-        alert('清空日志失败');
-      }
-    };
-
     return (
       <div className="start-screen">
         <h1 className="start-title">三国卡牌</h1>
         <div className="start-buttons">
-          <button className="start-btn" onClick={startGame}>
+          <button className="start-btn" onClick={() => startGame(4)}>
             开始游戏
-          </button>
-          <button className="clear-log-btn" onClick={handleClearLogs}>
-            清空日志
           </button>
         </div>
       </div>
@@ -398,12 +393,23 @@ export const GameBoard: React.FC = () => {
     }
 
     if (selectedCard.type === CardType.SPELL) {
+      // 不需要选择目标的锦囊牌
+      const noTargetSpells = [
+        SpellCardName.DRAW_TWO,  // 无中生有
+        SpellCardName.SAVAGE,    // 南蛮入侵
+        SpellCardName.ARCHERY,   // 万箭齐发
+        SpellCardName.PEACH_GARDEN, // 桃园结义
+      ];
+      if (noTargetSpells.includes(selectedCard.name as SpellCardName)) {
+        return false; // 这些牌不需要选择目标
+      }
+
       if (selectedCard.name === SpellCardName.STEAL) {
         // 顺手牵羊：距离限制为1
         const distance = DistanceCalculator.calculateDistance(humanPlayer, targetPlayer, gameState.players);
         return distance <= 1;
       }
-      // 过河拆桥、决斗、火攻等没有距离限制
+      // 过河拆桥、决斗、火攻等需要选择目标，没有距离限制
       return true;
     }
 
@@ -489,8 +495,10 @@ export const GameBoard: React.FC = () => {
     // 如果不是自己的回合或不在出牌阶段，卡牌不可用
     if (!isHumanTurn || gameState.phase !== GamePhase.PLAY) return false;
 
-    // 检查是否是"杀"卡牌
-    if (card.type === CardType.BASIC && card.name === BasicCardName.ATTACK) {
+    // 检查是否是"杀"卡牌（包括普通杀、雷杀、火杀）
+    const isAttackCard = card.type === CardType.BASIC &&
+      (card.name === BasicCardName.ATTACK || card.name === BasicCardName.THUNDER_ATTACK || card.name === BasicCardName.FIRE_ATTACK_CARD);
+    if (isAttackCard) {
       // 检查本回合是否已经使用过杀（没有诸葛连弩的情况下）
       const hasCrossbow = humanPlayer.equipment.weapon?.name === '诸葛连弩';
       if (!hasCrossbow && attackCountThisTurn >= 1) {
@@ -535,8 +543,20 @@ export const GameBoard: React.FC = () => {
             <span>第 {gameState.round} 轮</span>
             <span className="game-phase">{getPhaseText(gameState.phase)}</span>
             <span className="current-player">当前回合: {currentPlayer.character.name}</span>
-            <span>牌堆: {gameState.deck.length} 张</span>
-            <span>弃牌: {gameState.discardPile.length} 张</span>
+            <span
+              className="deck-info clickable"
+              onClick={() => setShowDeckModal(true)}
+              title="点击查看牌堆"
+            >
+              牌堆: {gameState.deck.length} 张
+            </span>
+            <span
+              className="discard-info clickable"
+              onClick={() => setShowDiscardModal(true)}
+              title="点击查看弃牌堆"
+            >
+              弃牌: {gameState.discardPile.length} 张
+            </span>
           </div>
           {/* 计时器 */}
           {isTimerRunning && !isPaused && (
@@ -560,9 +580,21 @@ export const GameBoard: React.FC = () => {
             {isPaused ? '▶ 继续' : '⏸ 暂停'}
           </button>
 
+          {/* 重新开始按钮 */}
+          <button
+            className="restart-btn"
+            onClick={() => {
+              if (confirm('确定要重新开始游戏吗？')) {
+                resetGame(4);
+              }
+            }}
+          >
+            🔄 重新开始
+          </button>
+
         </div>
 
-        {/* 暂停遮罩层 */}
+        {/* 暂停指示器 */}
         {isPaused && (
           <div className="pause-overlay">
             <div className="pause-content">
@@ -571,6 +603,126 @@ export const GameBoard: React.FC = () => {
               <button className="pause-resume-btn" onClick={resumeGame}>
                 ▶ 继续游戏
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* 牌堆查看弹窗 */}
+        {showDeckModal && (
+          <div className="deck-modal-overlay" onClick={() => setShowDeckModal(false)}>
+            <div className="deck-modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="deck-modal-header">
+                <h3>牌堆内容 (共 {gameState.deck.length} 张)</h3>
+                <div className="deck-modal-actions">
+                  <button
+                    className={`sort-btn ${deckSortBy === 'original' ? 'active' : ''}`}
+                    onClick={() => setDeckSortBy('original')}
+                  >
+                    原始顺序
+                  </button>
+                  <button
+                    className={`sort-btn ${deckSortBy === 'type' ? 'active' : ''}`}
+                    onClick={() => setDeckSortBy('type')}
+                  >
+                    按类型排序
+                  </button>
+                  <button className="close-btn" onClick={() => setShowDeckModal(false)}>✕</button>
+                </div>
+              </div>
+              <div className="deck-modal-body">
+                {gameState.deck.length === 0 ? (
+                  <p>牌堆为空</p>
+                ) : (
+                  <div className="deck-cards-grid">
+                    {(() => {
+                      // 根据排序方式准备数据（不影响原始牌堆顺序）
+                      let displayCards = [...gameState.deck];
+                      if (deckSortBy === 'type') {
+                        const typeOrder = { 'basic': 0, 'spell': 1, 'equipment': 2 };
+                        displayCards.sort((a, b) => {
+                          const typeDiff = (typeOrder[a.type as keyof typeof typeOrder] || 0) - (typeOrder[b.type as keyof typeof typeOrder] || 0);
+                          if (typeDiff !== 0) return typeDiff;
+                          return a.name.localeCompare(b.name);
+                        });
+                      }
+                      return displayCards.map((card, index) => (
+                        <div key={`${card.id}-${index}`} className={`deck-card-visual ${card.type}`}>
+                          <div className="card-header">
+                            <span className="card-suit-small">{card.suit}</span>
+                            <span className="card-number">{card.number}</span>
+                          </div>
+                          <div className="card-body">
+                            <span className="card-name-visual">{card.name}</span>
+                          </div>
+                          <div className="card-footer">
+                            <span className="card-type-badge">{card.type}</span>
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 弃牌堆查看弹窗 */}
+        {showDiscardModal && (
+          <div className="deck-modal-overlay" onClick={() => setShowDiscardModal(false)}>
+            <div className="deck-modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="deck-modal-header">
+                <h3>弃牌堆内容 (共 {gameState.discardPile.length} 张)</h3>
+                <div className="deck-modal-actions">
+                  <button
+                    className={`sort-btn ${discardSortBy === 'original' ? 'active' : ''}`}
+                    onClick={() => setDiscardSortBy('original')}
+                  >
+                    原始顺序
+                  </button>
+                  <button
+                    className={`sort-btn ${discardSortBy === 'type' ? 'active' : ''}`}
+                    onClick={() => setDiscardSortBy('type')}
+                  >
+                    按类型排序
+                  </button>
+                  <button className="close-btn" onClick={() => setShowDiscardModal(false)}>✕</button>
+                </div>
+              </div>
+              <div className="deck-modal-body">
+                {gameState.discardPile.length === 0 ? (
+                  <p>弃牌堆为空</p>
+                ) : (
+                  <div className="deck-cards-grid">
+                    {(() => {
+                      // 根据排序方式准备数据（不影响原始弃牌堆顺序）
+                      let displayCards = [...gameState.discardPile];
+                      if (discardSortBy === 'type') {
+                        const typeOrder = { 'basic': 0, 'spell': 1, 'equipment': 2 };
+                        displayCards.sort((a, b) => {
+                          const typeDiff = (typeOrder[a.type as keyof typeof typeOrder] || 0) - (typeOrder[b.type as keyof typeof typeOrder] || 0);
+                          if (typeDiff !== 0) return typeDiff;
+                          return a.name.localeCompare(b.name);
+                        });
+                      }
+                      return displayCards.map((card, index) => (
+                        <div key={`${card.id}-${index}`} className={`deck-card-visual ${card.type}`}>
+                          <div className="card-header">
+                            <span className="card-suit-small">{card.suit}</span>
+                            <span className="card-number">{card.number}</span>
+                          </div>
+                          <div className="card-body">
+                            <span className="card-name-visual">{card.name}</span>
+                          </div>
+                          <div className="card-footer">
+                            <span className="card-type-badge">{card.type}</span>
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -593,7 +745,7 @@ export const GameBoard: React.FC = () => {
                   isCurrentTurn={showHighlight}
                   isSelected={selectedTargetIds.includes(player.id)}
                   isHuman={false}
-                  showIdentity={player.isDead || gameState.phase === GamePhase.GAME_OVER}
+                  showIdentity={true}
                   isLord={lordPlayer?.id === player.id}
                   isSelectable={canSelectTarget(player)}
                   onClick={() => handlePlayerClick(player.id)}
@@ -633,8 +785,12 @@ export const GameBoard: React.FC = () => {
                 const isDiscardPhase = gameState.phase === GamePhase.DISCARD;
                 const isResponsePhase = gameState.phase === GamePhase.RESPONSE;
 
-                // 响应阶段：只有闪可以点击
-                const isResponseCard = isResponsePhase && card.name === BasicCardName.DODGE;
+                // 响应阶段：只有闪可以点击，且当前玩家必须是响应目标（不是攻击者）
+                const pendingResponse = gameState.pendingResponse;
+                const isDodgeTarget = pendingResponse &&
+                  pendingResponse.request.targetPlayerId === humanPlayer.id &&
+                  pendingResponse.request.sourcePlayerId !== humanPlayer.id;
+                const isResponseCard = isResponsePhase && card.name === BasicCardName.DODGE && isDodgeTarget;
 
                 // 出牌阶段：检查卡牌是否可用（攻击范围、使用次数等）
                 const isPlayable = isCardPlayable(card);
@@ -671,27 +827,181 @@ export const GameBoard: React.FC = () => {
               </div>
             )}
 
-            {/* 响应阶段提示（被杀时） */}
+            {/* 响应阶段提示（被杀或锦囊牌时） */}
             {gameState.phase === GamePhase.RESPONSE && gameState.pendingResponse && (
               <div className="response-panel">
-                {gameState.pendingResponse.request.targetPlayerId === humanPlayer.id ? (
+                {gameState.pendingResponse.request.responseType === ResponseType.NULLIFY ? (
+                  // 无懈可击响应阶段 - 只有非锦囊牌使用者才显示响应界面
+                  gameState.pendingResponse.request.sourcePlayerId !== humanPlayer.id ? (
+                    <>
+                      <div className="response-info">
+                        <span className="response-attacker">
+                          {gameState.players.find(p => p.id === gameState.pendingResponse?.request.sourcePlayerId)?.character.name}
+                        </span>
+                        使用了【{gameState.pendingResponse.request.cardName}】
+                      </div>
+                      <div className="response-hint">
+                        是否打出【无懈可击】进行抵消？
+                      </div>
+                      <div className="response-buttons">
+                        <button
+                          className="action-btn btn-response"
+                          onClick={() => {
+                            // 查找手牌中的无懈可击
+                            const nullificationCard = humanPlayer.handCards.find(
+                              c => c.name === SpellCardName.NULLIFICATION
+                            );
+                            if (nullificationCard) {
+                              respondToAttack(nullificationCard.id);
+                            }
+                          }}
+                          disabled={!humanPlayer.handCards.some(c => c.name === SpellCardName.NULLIFICATION)}
+                        >
+                          打出无懈可击
+                        </button>
+                        <button
+                          className="action-btn btn-no-response"
+                          onClick={() => respondToAttack()}
+                        >
+                          不响应
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    // 锦囊牌使用者等待其他玩家响应
+                    <>
+                      <div className="response-info">
+                        等待其他玩家是否打出【无懈可击】...
+                      </div>
+                    </>
+                  )
+                ) : gameState.pendingResponse.request.responseType === ResponseType.ATTACK ? (
+                  // 南蛮入侵响应阶段（需要打出杀）
                   <>
-                    <div className="response-info">
-                      <span className="response-attacker">
-                        {gameState.players.find(p => p.id === gameState.pendingResponse?.request.sourcePlayerId)?.character.name}
-                      </span>
-                      对你使用了【杀】
-                    </div>
-                    <div className="response-hint">
-                      点击【闪】进行响应，或直接点击"不响应"受到伤害
-                    </div>
-                    <button
-                      className="action-btn btn-no-response"
-                      onClick={() => respondToAttack()}
-                    >
-                      不响应（受到1点伤害）
-                    </button>
+                    {gameState.pendingResponse.request.targetPlayerId === humanPlayer.id ? (
+                      // 当前玩家需要响应
+                      <>
+                        <div className="response-info">
+                          <span className="response-attacker">
+                            {gameState.players.find(p => p.id === gameState.pendingResponse?.request.sourcePlayerId)?.character.name}
+                          </span>
+                          使用了【南蛮入侵】
+                        </div>
+                        <div className="response-hint">
+                          请打出一张【杀】进行响应，否则受到1点伤害
+                        </div>
+                        <div className="response-buttons">
+                          <button
+                            className="action-btn btn-response"
+                            onClick={() => {
+                              // 查找手牌中的杀（包括普通杀、雷杀、火杀）
+                              const attackCard = humanPlayer.handCards.find(
+                                c => c.name === BasicCardName.ATTACK ||
+                                  c.name === BasicCardName.THUNDER_ATTACK ||
+                                  c.name === BasicCardName.FIRE_ATTACK_CARD
+                              );
+                              if (attackCard) {
+                                respondToAttack(attackCard.id);
+                              }
+                            }}
+                            disabled={!humanPlayer.handCards.some(
+                              c => c.name === BasicCardName.ATTACK ||
+                                c.name === BasicCardName.THUNDER_ATTACK ||
+                                c.name === BasicCardName.FIRE_ATTACK_CARD
+                            )}
+                          >
+                            打出杀
+                          </button>
+                          <button
+                            className="action-btn btn-no-response"
+                            onClick={() => respondToAttack()}
+                          >
+                            不响应（受到1点伤害）
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      // 等待其他玩家响应
+                      <div className="response-waiting">
+                        等待 {gameState.players.find(p => p.id === gameState.pendingResponse?.request.targetPlayerId)?.character.name} 响应【南蛮入侵】...
+                      </div>
+                    )}
                   </>
+                ) : gameState.pendingResponse.request.responseType === ResponseType.DODGE &&
+                  (gameState.pendingResponse.request.cardName === '万箭齐发' ||
+                    gameState.pendingResponse.multiTargetQueue) ? (
+                  // 万箭齐发响应阶段（需要打出闪）
+                  <>
+                    {gameState.pendingResponse.request.targetPlayerId === humanPlayer.id ? (
+                      // 当前玩家需要响应
+                      <>
+                        <div className="response-info">
+                          <span className="response-attacker">
+                            {gameState.players.find(p => p.id === gameState.pendingResponse?.request.sourcePlayerId)?.character.name}
+                          </span>
+                          使用了【万箭齐发】
+                        </div>
+                        <div className="response-hint">
+                          请打出一张【闪】进行响应，否则受到1点伤害
+                        </div>
+                        <div className="response-buttons">
+                          <button
+                            className="action-btn btn-response"
+                            onClick={() => {
+                              // 查找手牌中的闪
+                              const dodgeCard = humanPlayer.handCards.find(
+                                c => c.name === BasicCardName.DODGE
+                              );
+                              if (dodgeCard) {
+                                respondToAttack(dodgeCard.id);
+                              }
+                            }}
+                            disabled={!humanPlayer.handCards.some(c => c.name === BasicCardName.DODGE)}
+                          >
+                            打出闪
+                          </button>
+                          <button
+                            className="action-btn btn-no-response"
+                            onClick={() => respondToAttack()}
+                          >
+                            不响应（受到1点伤害）
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      // 等待其他玩家响应
+                      <div className="response-waiting">
+                        等待 {gameState.players.find(p => p.id === gameState.pendingResponse?.request.targetPlayerId)?.character.name} 响应【万箭齐发】...
+                      </div>
+                    )}
+                  </>
+                ) : gameState.pendingResponse.request.targetPlayerId === humanPlayer.id ? (
+                  // 普通响应阶段（闪）- 针对杀
+                  gameState.pendingResponse.request.sourcePlayerId !== humanPlayer.id ? (
+                    // 当前玩家是被攻击目标，需要响应
+                    <>
+                      <div className="response-info">
+                        <span className="response-attacker">
+                          {gameState.players.find(p => p.id === gameState.pendingResponse?.request.sourcePlayerId)?.character.name}
+                        </span>
+                        对你使用了【{gameState.pendingResponse.request.cardName}】
+                      </div>
+                      <div className="response-hint">
+                        点击【闪】进行响应，或直接点击"不响应"受到伤害
+                      </div>
+                      <button
+                        className="action-btn btn-no-response"
+                        onClick={() => respondToAttack()}
+                      >
+                        不响应（受到1点伤害）
+                      </button>
+                    </>
+                  ) : (
+                    // 攻击者等待目标响应
+                    <div className="response-waiting">
+                      等待 {gameState.players.find(p => p.id === gameState.pendingResponse?.request.targetPlayerId)?.character.name} 响应【杀】...
+                    </div>
+                  )
                 ) : (
                   <div className="response-waiting">
                     等待 {gameState.players.find(p => p.id === gameState.pendingResponse?.request.targetPlayerId)?.character.name} 响应...
@@ -728,8 +1038,8 @@ export const GameBoard: React.FC = () => {
           <div className="game-over">
             <div className="game-over-title">游戏结束</div>
             <div className="game-over-winner">{getWinnerText(gameState.winner)}</div>
-            <button className="start-btn" onClick={() => window.location.reload()}>
-              再来一局
+            <button className="start-btn" onClick={() => resetGame(4)}>
+              重新开始
             </button>
           </div>
         )}
@@ -753,20 +1063,38 @@ export const GameBoard: React.FC = () => {
                 </filter>
               </defs>
 
-              {/* 发光线条 */}
-              <line
-                x1={linePosition.start.x}
-                y1={linePosition.start.y}
-                x2={linePosition.end.x}
-                y2={linePosition.end.y}
-                stroke="url(#lineGradient)"
-                strokeWidth="4"
-                strokeLinecap="round"
-                filter="url(#glow)"
-                className="card-animation-line"
-              />
+              {/* 发光线条 - 统一使用长距离样式，都有箭头，线条更细 */}
+              {(() => {
+                return (
+                  <>
+                    {/* 发光背景线 - 更细 */}
+                    <line
+                      x1={linePosition.start.x}
+                      y1={linePosition.start.y}
+                      x2={linePosition.end.x}
+                      y2={linePosition.end.y}
+                      stroke="#ff6b6b"
+                      strokeWidth="6"
+                      strokeLinecap="round"
+                      opacity="0.3"
+                      className="card-animation-line-glow-bg"
+                    />
+                    <line
+                      x1={linePosition.start.x}
+                      y1={linePosition.start.y}
+                      x2={linePosition.end.x}
+                      y2={linePosition.end.y}
+                      stroke="url(#lineGradient)"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      filter="url(#glow)"
+                      className="card-animation-line"
+                    />
+                  </>
+                );
+              })()}
 
-              {/* 箭头 - 计算角度指向目标 */}
+              {/* 箭头 - 计算角度指向目标，统一使用长距离样式 */}
               {(() => {
                 const dx = linePosition.end.x - linePosition.start.x;
                 const dy = linePosition.end.y - linePosition.start.y;

@@ -22,6 +22,8 @@ export enum CardColor {
 // 基本牌名称
 export enum BasicCardName {
   ATTACK = '杀',
+  THUNDER_ATTACK = '雷杀',
+  FIRE_ATTACK_CARD = '火杀',
   DODGE = '闪',
   PEACH = '桃',
 }
@@ -36,14 +38,15 @@ export enum SpellCardName {
   ARCHERY = '万箭齐发',
   SAVAGE = '南蛮入侵',
   DRAW_TWO = '无中生有',
+  NULLIFICATION = '无懈可击',
 }
 
 // 装备类型
 export enum EquipmentType {
   WEAPON = 'weapon',
   ARMOR = 'armor',
-  HORSE_PLUS = 'horse_plus',
-  HORSE_MINUS = 'horse_minus',
+  HORSE_PLUS = 'horsePlus',
+  HORSE_MINUS = 'horseMinus',
 }
 
 // 卡牌接口
@@ -157,6 +160,13 @@ export enum GamePhase {
   GAME_OVER = 'game_over',
 }
 
+// 响应类型
+export enum ResponseType {
+  DODGE = 'dodge',           // 需要出闪响应（如杀）
+  ATTACK = 'attack',         // 需要出杀响应（如南蛮入侵）
+  NULLIFY = 'nullify',       // 可以被无懈可击响应（锦囊牌）
+}
+
 // 响应请求（用于杀、决斗等需要响应的牌）
 export interface ResponseRequest {
   targetPlayerId: string;      // 需要响应的玩家
@@ -165,6 +175,16 @@ export interface ResponseRequest {
   responseCardName: string;    // 可以打出的响应牌名（如"闪"）
   damage: number;              // 不响应时受到的伤害
   timeout?: number;            // 响应超时时间（毫秒）
+  responseType?: ResponseType; // 响应类型
+  spellCardEffect?: () => void; // 锦囊牌效果（用于无懈可击抵消后执行）
+}
+
+// 多目标响应队列项（用于南蛮入侵、万箭齐发等）
+export interface MultiTargetResponseQueueItem {
+  targetPlayerId: string;
+  responded: boolean;
+  result: boolean;
+  responseCardId?: string;
 }
 
 // 待处理的响应
@@ -173,6 +193,10 @@ export interface PendingResponse {
   resolved: boolean;
   result: boolean;             // 是否成功响应
   responseCardId?: string;     // 打出的响应牌ID
+  // 多目标响应相关字段（用于南蛮入侵、万箭齐发）
+  multiTargetQueue?: MultiTargetResponseQueueItem[];  // 响应队列
+  currentTargetIndex?: number;  // 当前响应目标索引
+  sourcePlayerId?: string;      // 锦囊牌来源玩家ID（用于伤害计算）
 }
 
 // 游戏状态

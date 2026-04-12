@@ -31,6 +31,32 @@ const getGameLogFilePath = () => {
   return path.join(logsDir, `game_${timestamp}.log`);
 };
 
+// 牌堆日志文件路径（记录当前牌堆中的牌）
+const getDeckLogFilePath = () => {
+  const projectRoot = path.join(__dirname, '..');
+  const logsDir = path.join(projectRoot, 'logs');
+  
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+  
+  const timestamp = new Date().toISOString().slice(0, 10);
+  return path.join(logsDir, `deck_${timestamp}.log`);
+};
+
+// 弃牌堆日志文件路径（记录弃牌堆中的牌）
+const getDiscardPileLogFilePath = () => {
+  const projectRoot = path.join(__dirname, '..');
+  const logsDir = path.join(projectRoot, 'logs');
+  
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+  
+  const timestamp = new Date().toISOString().slice(0, 10);
+  return path.join(logsDir, `discard_pile_${timestamp}.log`);
+};
+
 // 保存控制台日志到文件
 const saveConsoleLogToFile = (level, message) => {
   try {
@@ -83,6 +109,139 @@ const clearGameLogFile = () => {
     return { success: true };
   } catch (error) {
     console.error('清空游戏记录失败:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// 清空牌堆日志文件
+const clearDeckLogFile = () => {
+  try {
+    const logFilePath = getDeckLogFilePath();
+    if (fs.existsSync(logFilePath)) {
+      fs.writeFileSync(logFilePath, '', 'utf8');
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('清空牌堆日志失败:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// 清空弃牌堆日志文件
+const clearDiscardPileLogFile = () => {
+  try {
+    const logFilePath = getDiscardPileLogFilePath();
+    if (fs.existsSync(logFilePath)) {
+      fs.writeFileSync(logFilePath, '', 'utf8');
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('清空弃牌堆日志失败:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// 保存牌堆状态到文件（记录变化原因和变化后的牌堆）
+const saveDeckStateToFile = (data) => {
+  try {
+    const logFilePath = getDeckLogFilePath();
+    const timestamp = new Date().toLocaleTimeString();
+
+    // 检查数据格式
+    if (!data || typeof data !== 'object') {
+      console.error('保存牌堆状态失败: 数据格式错误', data);
+      return { success: false, error: '数据格式错误' };
+    }
+
+    const { reason, cards, changedCards } = data;
+
+    // 检查 cards 是否为数组
+    if (!Array.isArray(cards)) {
+      console.error('保存牌堆状态失败: cards 不是数组', cards);
+      return { success: false, error: 'cards 不是数组' };
+    }
+
+    let content = `\n========== [${timestamp}] ${reason || '牌堆更新'} ==========\n`;
+
+    // 如果有变化的牌，打印变化的牌详情
+    if (changedCards && Array.isArray(changedCards) && changedCards.length > 0) {
+      content += `共 ${changedCards.length} 张牌:\n`;
+      changedCards.forEach((card, index) => {
+        if (card && card.name && card.suit && card.number) {
+          content += `  ${index + 1}. ${card.name} [${card.suit}${card.number}]\n`;
+        }
+      });
+      content += '\n';
+    }
+
+    // 打印当前牌堆
+    content += `当前牌堆共 ${cards.length} 张牌:\n`;
+    cards.forEach((card, index) => {
+      if (card && card.name && card.suit && card.number) {
+        content += `  ${index + 1}. ${card.name} [${card.suit}${card.number}]\n`;
+      } else {
+        content += `  ${index + 1}. [无效卡牌数据]\n`;
+      }
+    });
+    content += '========================================\n';
+
+    fs.appendFileSync(logFilePath, content, 'utf8');
+    return { success: true, filePath: logFilePath };
+  } catch (error) {
+    console.error('保存牌堆状态失败:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// 保存弃牌堆状态到文件（记录变化原因和变化后的弃牌堆）
+const saveDiscardPileStateToFile = (data) => {
+  try {
+    const logFilePath = getDiscardPileLogFilePath();
+    const timestamp = new Date().toLocaleTimeString();
+
+    // 检查数据格式
+    if (!data || typeof data !== 'object') {
+      console.error('保存弃牌堆状态失败: 数据格式错误', data);
+      return { success: false, error: '数据格式错误' };
+    }
+
+    const { reason, cards, previousCount, changedCards } = data;
+
+    // 检查 cards 是否为数组
+    if (!Array.isArray(cards)) {
+      console.error('保存弃牌堆状态失败: cards 不是数组', cards);
+      return { success: false, error: 'cards 不是数组' };
+    }
+
+    let content = `\n========== [${timestamp}] ${reason || '弃牌堆更新'} ==========\n`;
+    if (previousCount !== undefined) {
+      content += `变化前: ${previousCount} 张牌\n`;
+      content += `变化后: ${cards.length} 张牌\n`;
+    }
+    // 记录变化的牌
+    if (changedCards && Array.isArray(changedCards) && changedCards.length > 0) {
+      content += `变化的牌:\n`;
+      changedCards.forEach((card, index) => {
+        if (card && card.name && card.suit && card.number) {
+          content += `  - ${card.name} [${card.suit}${card.number}]\n`;
+        }
+      });
+      content += '\n';
+    }
+    content += `当前弃牌堆共 ${cards.length} 张牌:\n`;
+    cards.forEach((card, index) => {
+      if (card && card.name && card.suit && card.number) {
+        content += `  ${index + 1}. ${card.name} [${card.suit}${card.number}]\n`;
+      } else {
+        content += `  ${index + 1}. [无效卡牌数据]\n`;
+      }
+    });
+    content += '========================================\n';
+
+    fs.appendFileSync(logFilePath, content, 'utf8');
+    return { success: true, filePath: logFilePath };
+  } catch (error) {
+    console.error('保存弃牌堆状态失败:', error);
     return { success: false, error: error.message };
   }
 };
@@ -152,6 +311,26 @@ ipcMain.handle('clear-console-logs', async () => {
 // IPC 处理程序 - 清空游戏记录
 ipcMain.handle('clear-game-logs', async () => {
   return clearGameLogFile();
+});
+
+// IPC 处理程序 - 保存牌堆状态
+ipcMain.handle('save-deck-state', async (event, data) => {
+  return saveDeckStateToFile(data);
+});
+
+// IPC 处理程序 - 保存弃牌堆状态
+ipcMain.handle('save-discard-pile-state', async (event, data) => {
+  return saveDiscardPileStateToFile(data);
+});
+
+// IPC 处理程序 - 清空牌堆日志
+ipcMain.handle('clear-deck-logs', async () => {
+  return clearDeckLogFile();
+});
+
+// IPC 处理程序 - 清空弃牌堆日志
+ipcMain.handle('clear-discard-pile-logs', async () => {
+  return clearDiscardPileLogFile();
 });
 
 app.whenReady().then(createWindow);

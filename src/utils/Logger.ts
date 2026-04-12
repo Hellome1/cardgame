@@ -73,6 +73,31 @@ class Logger {
           this.saveGameLog(message);
         }
       }) as EventListener);
+      
+      // 监听牌堆状态更新事件
+      window.addEventListener('deck-state-update', ((event: CustomEvent) => {
+        const detail = event.detail;
+        console.log('[Logger event] deck-state-update detail:', detail);
+        if (detail && typeof detail === 'object') {
+          const { reason, cards, previousCount, changedCards } = detail;
+          console.log('[Logger event] changedCards:', changedCards);
+          if (cards && Array.isArray(cards)) {
+            this.saveDeckState(reason || '牌堆更新', cards, previousCount, changedCards);
+          }
+        }
+      }) as EventListener);
+      
+      // 监听弃牌堆状态更新事件
+      window.addEventListener('discard-pile-state-update', ((event: CustomEvent) => {
+        const detail = event.detail;
+        if (detail && typeof detail === 'object') {
+          const { reason, cards, previousCount, changedCards } = detail;
+          if (cards && Array.isArray(cards)) {
+            this.saveDiscardPileState(reason || '弃牌堆更新', cards, previousCount, changedCards);
+          }
+        }
+      }) as EventListener);
+      
       if (this.originalConsole) {
         this.originalConsole.log('[Logger] 已设置游戏日志事件监听器');
       }
@@ -160,6 +185,54 @@ class Logger {
     }
   }
 
+  // 保存牌堆状态（只保存到文件，不在控制台打印）
+  async saveDeckState(reason: string, cards: any[], previousCount?: number, changedCards?: any[]): Promise<void> {
+    if (!this.ipcRenderer) return;
+    
+    try {
+      // 将 changedCards 转换为纯对象，确保 IPC 序列化正确
+      const serializedChangedCards = changedCards?.map(card => ({
+        id: card.id,
+        name: card.name,
+        suit: card.suit,
+        number: card.number,
+        type: card.type,
+        color: card.color,
+        description: card.description,
+        equipmentType: card.equipmentType,
+        range: card.range
+      }));
+      console.log('[Logger.saveDeckState] serializedChangedCards:', serializedChangedCards);
+      await this.ipcRenderer.invoke('save-deck-state', { reason, cards, previousCount, changedCards: serializedChangedCards });
+    } catch (e) {
+      // 静默失败
+    }
+  }
+
+  // 保存弃牌堆状态（只保存到文件，不在控制台打印）
+  async saveDiscardPileState(reason: string, cards: any[], previousCount?: number, changedCards?: any[]): Promise<void> {
+    if (!this.ipcRenderer) return;
+    
+    try {
+      // 将 changedCards 转换为纯对象，确保 IPC 序列化正确
+      const serializedChangedCards = changedCards?.map(card => ({
+        id: card.id,
+        name: card.name,
+        suit: card.suit,
+        number: card.number,
+        type: card.type,
+        color: card.color,
+        description: card.description,
+        equipmentType: card.equipmentType,
+        range: card.range
+      }));
+      console.log('[Logger.saveDiscardPileState] serializedChangedCards:', serializedChangedCards);
+      await this.ipcRenderer.invoke('save-discard-pile-state', { reason, cards, previousCount, changedCards: serializedChangedCards });
+    } catch (e) {
+      // 静默失败
+    }
+  }
+
   // 清空控制台日志
   async clearConsoleLogs(): Promise<void> {
     if (this.ipcRenderer) {
@@ -182,10 +255,34 @@ class Logger {
     }
   }
 
+  // 清空牌堆日志
+  async clearDeckLogs(): Promise<void> {
+    if (this.ipcRenderer) {
+      try {
+        await this.ipcRenderer.invoke('clear-deck-logs');
+      } catch (e) {
+        console.error('[Logger] 清空牌堆日志失败:', e);
+      }
+    }
+  }
+
+  // 清空弃牌堆日志
+  async clearDiscardPileLogs(): Promise<void> {
+    if (this.ipcRenderer) {
+      try {
+        await this.ipcRenderer.invoke('clear-discard-pile-logs');
+      } catch (e) {
+        console.error('[Logger] 清空弃牌堆日志失败:', e);
+      }
+    }
+  }
+
   // 清空所有日志
   async clearAllLogs(): Promise<void> {
     await this.clearConsoleLogs();
     await this.clearGameLogs();
+    await this.clearDeckLogs();
+    await this.clearDiscardPileLogs();
   }
 
   // 以下方法保持向后兼容，用于直接记录到内存

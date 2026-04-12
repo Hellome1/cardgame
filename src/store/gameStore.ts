@@ -1,9 +1,14 @@
 import { create } from 'zustand';
-import { GameState, GameAction, GamePhase } from '../types/game';
+import { GameState, GameAction, GamePhase, ResponseType, SpellCardName, CardType, BasicCardName } from '../types/game';
 import { GameEngine } from '../game/GameEngine';
 
 // 模块级别的标志，确保 initGame 只执行一次
 let hasInitialized = false;
+
+// 重置初始化标志的函数（用于重新开始游戏）
+export function resetGameInitialization() {
+  hasInitialized = false;
+}
 
 interface GameStore {
   // 游戏引擎
@@ -36,8 +41,9 @@ interface GameStore {
   isPaused: boolean;  // 游戏是否暂停
 
   // 动作
-  initGame: (playerCount?: number) => void;
-  startGame: () => void;
+  initGame: (playerCount?: number, force?: boolean) => void;
+  resetGame: (playerCount?: number) => void;
+  startGame: (playerCount?: number) => void;
   selectCard: (cardId: string | null) => void;
   selectTarget: (playerId: string) => void;
   clearTarget: () => void;
@@ -68,9 +74,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   isTimerRunning: false,
   isPaused: false,
 
-  initGame: (playerCount = 4) => {
-    // 防止重复初始化
-    if (hasInitialized) {
+  initGame: (playerCount = 4, force = false) => {
+    // 防止重复初始化（除非强制重新初始化）
+    if (hasInitialized && !force) {
       console.log('游戏已经初始化，跳过重复初始化');
       return;
     }
@@ -123,12 +129,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
           logMessage = `${actingPlayer.character.name} 结束回合`;
           break;
         case GameAction.DISCARD_CARD: {
-          // 从弃牌堆找到刚弃置的牌
-          const discardedCard = gameState.discardPile[gameState.discardPile.length - 1];
-          if (discardedCard) {
-            logMessage = `${actingPlayer.character.name} 弃置了【${discardedCard.name}】`;
+          // 如果有传递cardName（AI弃牌），使用传递的cardName
+          if (action.cardName) {
+            logMessage = `${actingPlayer.character.name} 弃置了【${action.cardName}】`;
           } else {
-            logMessage = `${actingPlayer.character.name} 弃置了卡牌`;
+            // 从弃牌堆找到刚弃置的牌（人类玩家弃牌）
+            const discardedCard = gameState.discardPile[gameState.discardPile.length - 1];
+            if (discardedCard) {
+              logMessage = `${actingPlayer.character.name} 弃置了【${discardedCard.name}】`;
+            } else {
+              logMessage = `${actingPlayer.character.name} 弃置了卡牌`;
+            }
           }
           break;
         }
@@ -167,10 +178,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
   },
 
-  startGame: () => {
+  resetGame: (playerCount = 4) => {
+    // 重置初始化标志
+    resetGameInitialization();
+    // 停止计时器
+    get().stopTimer();
+    // 重新初始化游戏
+    get().initGame(playerCount, true);
+  },
+
+  startGame: (playerCount = 4) => {
+    console.log(`store.startGame 被调用，playerCount: ${playerCount}`);
     const { engine, logs } = get();
     if (engine) {
-      engine.startGame();
+      console.log(`调用 engine.startGame(${playerCount})`);
+      engine.startGame(playerCount);
       const gameState = engine.getState();
       const currentPlayer = gameState.players[gameState.currentPlayerIndex];
 
@@ -193,19 +215,43 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   selectCard: (cardId: string | null) => {
+    const { gameState, selectedCardId } = get();
+    if (gameState) {
+      const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+      if (cardId) {
+        const selectedCard = currentPlayer.handCards.find(c => c.id === cardId);
+        if (selectedCard) {
+          console.log(`玩家 ${currentPlayer.character.name} 选择了手牌: 【${selectedCard.name}】[${selectedCard.suit}${selectedCard.number}]`);
+        }
+      } else if (selectedCardId) {
+        // 取消选择时记录
+        const prevCard = currentPlayer.handCards.find(c => c.id === selectedCardId);
+        if (prevCard) {
+          console.log(`玩家 ${currentPlayer.character.name} 取消选择了手牌: 【${prevCard.name}】`);
+        }
+      }
+    }
     set({ selectedCardId: cardId });
   },
 
   selectTarget: (playerId: string) => {
-    const { selectedTargetIds } = get();
-    if (selectedTargetIds.includes(playerId)) {
-      set({
-        selectedTargetIds: selectedTargetIds.filter(id => id !== playerId)
-      });
-    } else {
-      set({
-        selectedTargetIds: [...selectedTargetIds, playerId]
-      });
+    const { selectedTargetIds, gameState } = get();
+    if (gameState) {
+      const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+      const targetPlayer = gameState.players.find(p => p.id === playerId);
+      if (targetPlayer) {
+        if (selectedTargetIds.includes(playerId)) {
+          console.log(`玩家 ${currentPlayer.character.name} 取消选择了目标武将: ${targetPlayer.character.name}`);
+          set({
+            selectedTargetIds: selectedTargetIds.filter(id => id !== playerId)
+          });
+        } else {
+          console.log(`玩家 ${currentPlayer.character.name} 选择了目标武将: ${targetPlayer.character.name}`);
+          set({
+            selectedTargetIds: [...selectedTargetIds, playerId]
+          });
+        }
+      }
     }
   },
 
@@ -251,11 +297,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
 
     if (success) {
-      // 如果使用成功且是杀，增加计数
-      const newAttackCount = card?.name === '杀' ? attackCountThisTurn + 1 : attackCountThisTurn;
+      // 如果使用成功且是杀（包括普通杀、雷杀、火杀），增加计数
+      const isAttack = card && card.type === CardType.BASIC &&
+        (card.name === BasicCardName.ATTACK || card.name === BasicCardName.THUNDER_ATTACK || card.name === BasicCardName.FIRE_ATTACK_CARD);
+      const newAttackCount = isAttack ? attackCountThisTurn + 1 : attackCountThisTurn;
 
-      // 出牌成功后刷新计时器
-      get().refreshTimer();
+      // 检查是否是锦囊牌（需要等待无懈可击响应）
+      if (card && card.type === CardType.SPELL && card.name !== SpellCardName.NULLIFICATION) {
+        // 锦囊牌需要等待无懈可击响应，启动8秒计时器
+        get().stopTimer();
+        get().startTimer(8);
+      } else {
+        // 其他牌刷新计时器
+        get().refreshTimer();
+      }
 
       set({
         selectedCardId: null,
@@ -316,20 +371,68 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const pendingResponse = engine.getPendingResponse();
     if (!pendingResponse) return;
 
+    // 获取当前需要响应的玩家
     const targetPlayer = gameState.players.find(p => p.id === pendingResponse.request.targetPlayerId);
     if (!targetPlayer) return;
 
-    const success = engine.respondToAttack(targetPlayer.id, cardId);
+    // 对于无懈可击响应，任何玩家都可以响应，获取当前人类玩家
+    let respondingPlayer = targetPlayer;
+    if (pendingResponse.request.responseType === ResponseType.NULLIFY) {
+      // 找到人类玩家（假设第一个玩家是人类）
+      const humanPlayer = gameState.players.find(p => !p.isAI);
+      if (humanPlayer) {
+        respondingPlayer = humanPlayer;
+      }
+    }
+
+    let success = false;
+    let logMessage = '';
+
+    // 根据响应类型处理不同的响应逻辑
+    if (pendingResponse.request.responseType === ResponseType.NULLIFY) {
+      // 无懈可击响应 - 任何玩家都可以打出无懈可击
+      success = engine.respondToNullification(respondingPlayer.id, cardId);
+      if (success) {
+        if (cardId) {
+          logMessage = `${respondingPlayer.character.name} 打出【无懈可击】，抵消了【${pendingResponse.request.cardName}】`;
+        } else {
+          logMessage = `【${pendingResponse.request.cardName}】生效`;
+        }
+      }
+    } else if (pendingResponse.request.responseType === ResponseType.ATTACK) {
+      // 南蛮入侵响应（需要打出杀）
+      success = engine.respondToAttack(targetPlayer.id, cardId);
+      if (success) {
+        if (cardId) {
+          logMessage = `${targetPlayer.character.name} 打出了【杀】，抵消了【南蛮入侵】`;
+        } else {
+          logMessage = `${targetPlayer.character.name} 没有打出【杀】，受到【南蛮入侵】的1点伤害`;
+        }
+      }
+    } else if (pendingResponse.request.responseType === ResponseType.DODGE) {
+      // 检查是否是万箭齐发或多目标响应
+      const isArchery = pendingResponse.request.cardName === '万箭齐发' || pendingResponse.multiTargetQueue;
+      success = engine.respondToAttack(targetPlayer.id, cardId);
+      if (success) {
+        if (cardId) {
+          logMessage = `${targetPlayer.character.name} 打出了【闪】，抵消了【${isArchery ? '万箭齐发' : pendingResponse.request.cardName}】`;
+        } else {
+          logMessage = `${targetPlayer.character.name} 没有打出【闪】，受到【${isArchery ? '万箭齐发' : pendingResponse.request.cardName}】的${pendingResponse.request.damage}点伤害`;
+        }
+      }
+    } else {
+      // 普通响应（闪）
+      success = engine.respondToAttack(targetPlayer.id, cardId);
+      if (success) {
+        if (cardId) {
+          logMessage = `${targetPlayer.character.name} 打出了【闪】，抵消了【${pendingResponse.request.cardName}】`;
+        } else {
+          logMessage = `${targetPlayer.character.name} 受到【${pendingResponse.request.cardName}】的${pendingResponse.request.damage}点伤害`;
+        }
+      }
+    }
 
     if (success) {
-      // 手动添加响应日志（因为 respondToAttack 不通过 executeAction 调用）
-      let logMessage = '';
-      if (cardId) {
-        logMessage = `${targetPlayer.character.name} 打出了【闪】，抵消了【杀】`;
-      } else {
-        logMessage = `${targetPlayer.character.name} 受到【杀】的1点伤害`;
-      }
-
       set({
         gameState: engine.getState(),
         logs: [logMessage, ...logs].slice(0, 50),
@@ -423,8 +526,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
         break;
       case 'response':
         // 响应阶段超时，视为放弃操作（不响应）
-        console.log('响应阶段超时，视为放弃操作');
-        get().respondToAttack();
+        // 检查是否还在响应阶段（可能已经被处理了）
+        const currentState = get().gameState;
+        if (currentState?.phase === 'response' && currentState?.pendingResponse) {
+          console.log('响应阶段超时，视为放弃操作');
+          get().respondToAttack();
+        } else {
+          console.log('响应阶段已结束，无需处理超时');
+        }
         break;
     }
 
@@ -446,21 +555,29 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   // 暂停游戏
   pauseGame: () => {
-    const { isPaused } = get();
+    const { isPaused, engine } = get();
     if (!isPaused) {
       console.log('游戏已暂停');
       set({ isPaused: true });
       // 暂停时停止计时器
       get().stopTimer();
+      // 通知游戏引擎暂停
+      if (engine) {
+        engine.setPaused(true);
+      }
     }
   },
 
   // 恢复游戏
   resumeGame: () => {
-    const { isPaused, gameState } = get();
+    const { isPaused, gameState, engine } = get();
     if (isPaused) {
       console.log('游戏已恢复');
       set({ isPaused: false });
+      // 通知游戏引擎恢复
+      if (engine) {
+        engine.setPaused(false);
+      }
       // 恢复时如果是玩家回合，重新启动计时器
       if (gameState) {
         const currentPlayer = gameState.players[gameState.currentPlayerIndex];
