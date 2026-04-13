@@ -399,6 +399,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
           logMessage = `【${pendingResponse.request.cardName}】生效`;
         }
       }
+    } else if (pendingResponse.request.responseType === ResponseType.DUEL) {
+      // 决斗响应 - 双方轮流出杀
+      success = engine.respondToDuel(targetPlayer.id, cardId);
+      if (success) {
+        if (cardId) {
+          // 打出了杀，继续决斗，不添加结束日志
+          const playedCard = targetPlayer.handCards.find(c => c.id === cardId);
+          logMessage = `${targetPlayer.character.name} 打出【${playedCard?.name || '杀'}】响应决斗`;
+        } else {
+          // 没出杀，受到伤害
+          logMessage = `${targetPlayer.character.name} 没有打出【杀】，受到【决斗】的1点伤害`;
+        }
+      }
     } else if (pendingResponse.request.responseType === ResponseType.ATTACK) {
       // 南蛮入侵响应（需要打出杀）
       success = engine.respondToAttack(targetPlayer.id, cardId);

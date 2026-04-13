@@ -165,6 +165,7 @@ export enum ResponseType {
   DODGE = 'dodge',           // 需要出闪响应（如杀）
   ATTACK = 'attack',         // 需要出杀响应（如南蛮入侵）
   NULLIFY = 'nullify',       // 可以被无懈可击响应（锦囊牌）
+  DUEL = 'duel',             // 决斗响应（双方轮流出杀）
 }
 
 // 响应请求（用于杀、决斗等需要响应的牌）
@@ -187,6 +188,14 @@ export interface MultiTargetResponseQueueItem {
   responseCardId?: string;
 }
 
+// 决斗响应状态
+export interface DuelState {
+  challengerId: string;        // 决斗发起者ID
+  targetId: string;            // 决斗目标ID
+  currentTurnId: string;       // 当前需要出杀的玩家ID
+  round: number;               // 决斗轮数
+}
+
 // 待处理的响应
 export interface PendingResponse {
   request: ResponseRequest;
@@ -197,6 +206,8 @@ export interface PendingResponse {
   multiTargetQueue?: MultiTargetResponseQueueItem[];  // 响应队列
   currentTargetIndex?: number;  // 当前响应目标索引
   sourcePlayerId?: string;      // 锦囊牌来源玩家ID（用于伤害计算）
+  // 决斗相关字段
+  duelState?: DuelState;        // 决斗状态
 }
 
 // 游戏状态

@@ -2,11 +2,12 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { Card } from '../Card/Card';
 import { PlayerAvatar } from '../PlayerAvatar/PlayerAvatar';
-import { GamePhase, Identity, CardType, SpellCardName, BasicCardName, ResponseType } from '../../types/game';
+import { GamePhase, Identity, CardType, SpellCardName, BasicCardName, ResponseType, Card as GameCard } from '../../types/game';
 import { DistanceCalculator } from '../../game/DistanceCalculator';
 import './GameBoard.css';
 
 // 模块级别的标志，确保只清空一次日志
+// @ts-ignore - 保留以备后续使用
 let hasAutoClearedLogs = false;
 
 // 卡牌使用动画信息
@@ -14,6 +15,15 @@ interface CardAnimation {
   sourcePlayerId: string;
   targetPlayerId: string;
   cardName: string;
+  timestamp: number;
+}
+
+// 出牌显示信息
+interface PlayedCardInfo {
+  id: string;
+  card: GameCard;
+  playerName: string;
+  targetName?: string;
   timestamp: number;
 }
 
@@ -79,6 +89,7 @@ export const GameBoard: React.FC = () => {
     respondToAttack,
     startTimer,
     stopTimer,
+    // @ts-ignore - 保留以备后续使用
     handleTimeout,
     pauseGame,
     resumeGame,
@@ -94,6 +105,9 @@ export const GameBoard: React.FC = () => {
   // 卡牌使用动画状态
   const [cardAnimation, setCardAnimation] = useState<CardAnimation | null>(null);
   const [linePosition, setLinePosition] = useState<{ start: { x: number, y: number }, end: { x: number, y: number } } | null>(null);
+
+  // 出牌显示区域状态 - 支持多张牌排列
+  const [playedCards, setPlayedCards] = useState<PlayedCardInfo[]>([]);
 
   // 牌堆查看弹窗状态
   const [showDeckModal, setShowDeckModal] = useState(false);
@@ -235,6 +249,39 @@ export const GameBoard: React.FC = () => {
           timestamp: Date.now(),
         });
       }
+
+      // 显示出牌信息（包括有目标和无目标的牌）
+      if (action.action === 'play_card' && action.cardName && !action.isResponse) {
+        const gameState = useGameStore.getState().gameState;
+        if (gameState) {
+          const player = gameState.players.find(p => p.id === action.playerId);
+          const target = action.targetIds?.length > 0
+            ? gameState.players.find(p => p.id === action.targetIds[0])
+            : undefined;
+
+          // 查找卡牌信息
+          const playedCard = player?.handCards.find(c => c.id === action.cardId) ||
+            gameState.discardPile[gameState.discardPile.length - 1];
+
+          if (player && playedCard) {
+            const newCard: PlayedCardInfo = {
+              id: `card_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              card: playedCard,
+              playerName: player.character.name,
+              targetName: target?.character.name,
+              timestamp: Date.now(),
+            };
+
+            // 添加新牌到列表开头
+            setPlayedCards(prev => [newCard, ...prev].slice(0, 5)); // 最多显示5张牌
+
+            // 3秒后移除这张牌
+            setTimeout(() => {
+              setPlayedCards(prev => prev.filter(c => c.id !== newCard.id));
+            }, 3000);
+          }
+        }
+      }
     };
 
     // 添加监听器
@@ -339,14 +386,27 @@ export const GameBoard: React.FC = () => {
   const lordPlayer = gameState.players.find(p => p.identity === Identity.LORD);
 
   const handleCardClick = (cardId: string) => {
-    // 响应阶段（被杀时打出闪）
+    // 响应阶段（打出响应牌）
     if (gameState.phase === GamePhase.RESPONSE) {
       const pendingResponse = gameState.pendingResponse;
       if (pendingResponse && pendingResponse.request.targetPlayerId === humanPlayer.id) {
-        // 检查点击的是不是闪
         const card = humanPlayer.handCards.find(c => c.id === cardId);
-        if (card && card.name === BasicCardName.DODGE) {
-          respondToAttack(cardId);
+        if (!card) return;
+
+        // 根据响应类型检查卡牌
+        if (pendingResponse.request.responseType === ResponseType.DODGE) {
+          // 需要打出闪
+          if (card.name === BasicCardName.DODGE) {
+            respondToAttack(cardId);
+          }
+        } else if (pendingResponse.request.responseType === ResponseType.ATTACK ||
+                   pendingResponse.request.responseType === ResponseType.DUEL) {
+          // 需要打出杀（南蛮入侵或决斗）
+          if (card.name === BasicCardName.ATTACK ||
+              card.name === BasicCardName.THUNDER_ATTACK ||
+              card.name === BasicCardName.FIRE_ATTACK_CARD) {
+            respondToAttack(cardId);
+          }
         }
       }
       return;
@@ -727,6 +787,37 @@ export const GameBoard: React.FC = () => {
           </div>
         )}
 
+        {/* 出牌显示区域 */}
+        <div className="played-cards-area">
+          {playedCards.map((item, index) => (
+            <div
+              key={item.id}
+              className="played-card-item"
+              style={{
+                transform: `translateX(${index * 90}px)`,
+                zIndex: playedCards.length - index,
+              }}
+            >
+              <div className="played-card-wrapper">
+                <Card
+                  card={item.card}
+                  isDisabled={true}
+                  showDescription={false}
+                />
+                <div className="played-card-label">
+                  <span className="played-card-player">{item.playerName}</span>
+                  {item.targetName && (
+                    <>
+                      <span className="played-card-arrow">→</span>
+                      <span className="played-card-target">{item.targetName}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
         <div className="game-main">
           {/* 对手区域 */}
           <div className="opponents-area">
@@ -785,12 +876,35 @@ export const GameBoard: React.FC = () => {
                 const isDiscardPhase = gameState.phase === GamePhase.DISCARD;
                 const isResponsePhase = gameState.phase === GamePhase.RESPONSE;
 
-                // 响应阶段：只有闪可以点击，且当前玩家必须是响应目标（不是攻击者）
+                // 响应阶段：检查是否可以打出响应牌
                 const pendingResponse = gameState.pendingResponse;
-                const isDodgeTarget = pendingResponse &&
-                  pendingResponse.request.targetPlayerId === humanPlayer.id &&
+                const isResponseTarget = pendingResponse &&
+                  pendingResponse.request.targetPlayerId === humanPlayer.id;
+
+                // 普通响应（闪）- 针对杀
+                const isDodgeResponse = isResponsePhase &&
+                  pendingResponse?.request.responseType === ResponseType.DODGE &&
+                  card.name === BasicCardName.DODGE &&
+                  isResponseTarget &&
                   pendingResponse.request.sourcePlayerId !== humanPlayer.id;
-                const isResponseCard = isResponsePhase && card.name === BasicCardName.DODGE && isDodgeTarget;
+
+                // 决斗响应（杀）- 双方都可以出杀
+                const isDuelResponse = isResponsePhase &&
+                  pendingResponse?.request.responseType === ResponseType.DUEL &&
+                  (card.name === BasicCardName.ATTACK ||
+                   card.name === BasicCardName.THUNDER_ATTACK ||
+                   card.name === BasicCardName.FIRE_ATTACK_CARD) &&
+                  isResponseTarget;
+
+                // 南蛮入侵响应（杀）
+                const isAttackResponse = isResponsePhase &&
+                  pendingResponse?.request.responseType === ResponseType.ATTACK &&
+                  (card.name === BasicCardName.ATTACK ||
+                   card.name === BasicCardName.THUNDER_ATTACK ||
+                   card.name === BasicCardName.FIRE_ATTACK_CARD) &&
+                  isResponseTarget;
+
+                const isResponseCard = isDodgeResponse || isDuelResponse || isAttackResponse;
 
                 // 出牌阶段：检查卡牌是否可用（攻击范围、使用次数等）
                 const isPlayable = isCardPlayable(card);
@@ -875,6 +989,58 @@ export const GameBoard: React.FC = () => {
                       </div>
                     </>
                   )
+                ) : gameState.pendingResponse.request.responseType === ResponseType.DUEL ? (
+                  // 决斗响应阶段（双方轮流出杀）
+                  <>
+                    {gameState.pendingResponse.request.targetPlayerId === humanPlayer.id ? (
+                      // 当前玩家需要出杀响应决斗
+                      <>
+                        <div className="response-info">
+                          <span className="response-attacker">
+                            {gameState.players.find(p => p.id === gameState.pendingResponse?.duelState?.challengerId)?.character.name}
+                          </span>
+                          向你发起【决斗】
+                        </div>
+                        <div className="response-hint">
+                          请打出一张【杀】进行响应，否则受到1点伤害
+                        </div>
+                        <div className="response-buttons">
+                          <button
+                            className="action-btn btn-response"
+                            onClick={() => {
+                              // 查找手牌中的杀（包括普通杀、雷杀、火杀）
+                              const attackCard = humanPlayer.handCards.find(
+                                c => c.name === BasicCardName.ATTACK ||
+                                  c.name === BasicCardName.THUNDER_ATTACK ||
+                                  c.name === BasicCardName.FIRE_ATTACK_CARD
+                              );
+                              if (attackCard) {
+                                respondToAttack(attackCard.id);
+                              }
+                            }}
+                            disabled={!humanPlayer.handCards.some(
+                              c => c.name === BasicCardName.ATTACK ||
+                                c.name === BasicCardName.THUNDER_ATTACK ||
+                                c.name === BasicCardName.FIRE_ATTACK_CARD
+                            )}
+                          >
+                            打出杀
+                          </button>
+                          <button
+                            className="action-btn btn-no-response"
+                            onClick={() => respondToAttack()}
+                          >
+                            不响应（受到1点伤害）
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      // 等待对方响应
+                      <div className="response-waiting">
+                        等待 {gameState.players.find(p => p.id === gameState.pendingResponse?.request.targetPlayerId)?.character.name} 响应【决斗】...
+                      </div>
+                    )}
+                  </>
                 ) : gameState.pendingResponse.request.responseType === ResponseType.ATTACK ? (
                   // 南蛮入侵响应阶段（需要打出杀）
                   <>

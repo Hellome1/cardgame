@@ -66,6 +66,10 @@ export class AIPlayer {
         if (this.getSuspicionLevel(aiPlayer.id, targetPlayer.id) >= 20) {
           return true;
         }
+        // 游戏初期（怀疑度为0），主公默认攻击非主公玩家（因为场上只有一个忠臣，其他都是敌人）
+        if (this.getSuspicionLevel(aiPlayer.id, targetPlayer.id) === 0 && !isTargetLord) {
+          return true;
+        }
         // 怀疑度低，暂时不攻击
         return false;
 
@@ -84,6 +88,10 @@ export class AIPlayer {
         }
         // 对于非主公玩家，根据怀疑度判断
         if (this.getSuspicionLevel(aiPlayer.id, targetPlayer.id) >= 30) {
+          return true;
+        }
+        // 游戏初期（怀疑度为0），默认攻击非主公玩家
+        if (this.getSuspicionLevel(aiPlayer.id, targetPlayer.id) === 0 && !isTargetLord) {
           return true;
         }
         return false;
@@ -335,6 +343,7 @@ export class AIPlayer {
   }
 
   // AI 弃牌逻辑
+  // @ts-ignore - 保留以备后续使用
   private async discardCards(player: Player): Promise<void> {
     const maxCards = player.character.hp;
     const cardsToDiscard = player.handCards.length - maxCards;
@@ -408,13 +417,30 @@ export class AIPlayer {
     return enemies.sort((a, b) => a.character.hp - b.character.hp)[0];
   }
 
+  // 选择最弱的敌人（不考虑攻击范围，用于决斗、火攻等无距离限制的锦囊）- 基于怀疑度
+  private selectWeakestEnemyWithoutRange(opponents: Player[], player: Player, allPlayers: Player[]): Player | null {
+    // 过滤出被怀疑是敌人的目标（不考虑攻击范围）
+    const enemies = opponents.filter(p => {
+      // 基于怀疑度判断是否是敌人
+      return this.isEnemyBySuspicion(player, p, allPlayers);
+    });
+
+    if (enemies.length === 0) {
+      console.log(`${player.character.name} 没有找到可疑敌人（无距离限制）`);
+      return null;
+    }
+
+    // 按血量排序，选择最弱的
+    return enemies.sort((a, b) => a.character.hp - b.character.hp)[0];
+  }
+
   // 为锦囊牌选择目标 - 基于怀疑度
   private selectTargetForSpell(card: Card, player: Player, opponents: Player[], allPlayers: Player[]): string[] | undefined {
     switch (card.name) {
       case SpellCardName.DUEL:
       case SpellCardName.FIRE_ATTACK:
-        // 选择血量最少的敌人（基于怀疑度）
-        const weakEnemy = this.selectWeakestEnemy(opponents, player, allPlayers);
+        // 选择血量最少的敌人（基于怀疑度，决斗和火攻没有距离限制）
+        const weakEnemy = this.selectWeakestEnemyWithoutRange(opponents, player, allPlayers);
         return weakEnemy ? [weakEnemy.id] : undefined;
 
       case SpellCardName.STEAL:

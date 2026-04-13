@@ -1,6 +1,7 @@
 import {
   GameState, Player, Identity, GamePhase,
-  ActionRequest, GameAction, Card, CardType, BasicCardName, SpellCardName, ResponseType
+  ActionRequest, GameAction, Card, CardType, BasicCardName, SpellCardName, ResponseType,
+  DuelState
 } from '../types/game';
 import { CardManager } from './CardManager';
 import { CharacterManager } from './CharacterManager';
@@ -18,7 +19,10 @@ export class GameEngine {
   private isPaused: boolean = false; // 游戏暂停状态
   private gameStartedFlag: boolean = false; // 游戏是否已开始
 
-  constructor(playerCount: number = 4) {
+  constructor(
+    // @ts-ignore - 保留以备后续使用
+    playerCount: number = 4
+  ) {
     GameEngine.instanceCount++;
     console.log(`创建 GameEngine 实例... (第 ${GameEngine.instanceCount} 次)`);
     this.cardManager = CardManager.getInstance();
@@ -314,14 +318,26 @@ export class GameEngine {
         }
         break;
       case GamePhase.RESPONSE:
-        // 响应阶段：等待目标玩家响应（打出闪）
+        // 响应阶段：等待目标玩家响应（打出闪/杀等）
         // 这个阶段由玩家操作或AI自动响应触发，不需要自动处理
         console.log(`响应阶段: 等待 ${this.state.pendingResponse?.request.targetPlayerId} 响应`);
         // 检查是否是AI目标，如果是则自动响应
         if (this.state.pendingResponse) {
-          const targetPlayer = this.state.players.find(p => p.id === this.state.pendingResponse?.request.targetPlayerId);
+          const pendingResponse = this.state.pendingResponse;
+          const targetPlayer = this.state.players.find(p => p.id === pendingResponse.request.targetPlayerId);
+
           if (targetPlayer?.isAI) {
-            this.processAIResponse(targetPlayer);
+            // 根据响应类型选择不同的AI处理方法
+            if (pendingResponse.duelState) {
+              // 决斗响应
+              this.processDuelResponse(targetPlayer);
+            } else if (pendingResponse.request.responseType === ResponseType.NULLIFY) {
+              // 无懈可击响应已在 processAINullificationResponse 中处理
+              // 这里不需要额外处理
+            } else {
+              // 普通响应（闪、杀等）
+              this.processAIResponse(targetPlayer);
+            }
           }
         }
         break;
@@ -689,12 +705,12 @@ export class GameEngine {
   private executeSpellEffect(player: Player, card: Card, targets: Player[]): boolean {
     switch (card.name) {
       case SpellCardName.DUEL:
-        // 决斗：与目标拼杀
+        // 决斗：与目标拼杀，由目标先出杀
         if (targets.length === 0) return false;
         const duelTarget = targets[0];
         if (duelTarget.isDead) return false;
-        // 简化版：目标受到1点伤害
-        this.dealDamage(player.id, duelTarget.id, 1);
+        // 启动决斗流程，目标先出杀
+        this.startDuel(player, duelTarget);
         return true;
 
       case SpellCardName.FIRE_ATTACK:
@@ -961,6 +977,7 @@ export class GameEngine {
     const player = this.state.players.find(p => p.id === playerId);
     if (!player) return false;
 
+    // @ts-ignore - 保留以备后续使用
     let hasDiscarded = false;
 
     cardIds.forEach(cardId => {
@@ -1059,7 +1076,12 @@ export class GameEngine {
   }
 
   // 触发技能（简化版）
-  private triggerSkill(player: Player, trigger: string, context: any): void {
+  private triggerSkill(
+    player: Player,
+    trigger: string,
+    // @ts-ignore - 保留以备后续使用
+    context: any
+  ): void {
     player.character.skills.forEach(skill => {
       if (skill.trigger === trigger && !skill.isPassive) {
         console.log(`${player.character.name} 触发了技能 ${skill.name}`);
@@ -1518,6 +1540,199 @@ export class GameEngine {
   // 获取待处理的响应
   getPendingResponse() {
     return this.state.pendingResponse;
+  }
+
+  // 启动决斗流程
+  private startDuel(challenger: Player, target: Player): void {
+    console.log(`【决斗】${challenger.character.name} 向 ${target.character.name} 发起决斗！`);
+
+    // 创建决斗状态，由目标先出杀
+    const duelState: DuelState = {
+      challengerId: challenger.id,
+      targetId: target.id,
+      currentTurnId: target.id, // 目标先出杀
+      round: 1,
+    };
+
+    // 创建响应请求
+    this.state.pendingResponse = {
+      request: {
+        targetPlayerId: target.id,
+        sourcePlayerId: challenger.id,
+        cardName: '决斗',
+        responseCardName: BasicCardName.ATTACK,
+        damage: 1,
+        responseType: ResponseType.DUEL,
+      },
+      resolved: false,
+      result: false,
+      duelState: duelState,
+    };
+
+    // 进入响应阶段
+    this.state.phase = GamePhase.RESPONSE;
+
+    // 如果是AI目标，自动响应
+    if (target.isAI) {
+      this.processDuelResponse(target);
+    }
+  }
+
+  // 处理决斗响应（打出杀或不响应）
+  respondToDuel(playerId: string, cardId?: string): boolean {
+    const pendingResponse = this.state.pendingResponse;
+    if (!pendingResponse || !pendingResponse.duelState) {
+      console.log(`respondToDuel 失败: 没有待处理的决斗响应`);
+      return false;
+    }
+    if (pendingResponse.resolved) {
+      console.log(`respondToDuel 失败: 响应已解决`);
+      return false;
+    }
+    if (pendingResponse.request.responseType !== ResponseType.DUEL) {
+      console.log(`respondToDuel 失败: 不是决斗响应类型`);
+      return false;
+    }
+
+    const player = this.state.players.find(p => p.id === playerId);
+    const challenger = this.state.players.find(p => p.id === pendingResponse.duelState?.challengerId);
+    const target = this.state.players.find(p => p.id === pendingResponse.duelState?.targetId);
+
+    if (!player || !challenger || !target) {
+      console.log(`respondToDuel 失败: 找不到玩家`);
+      return false;
+    }
+
+    const duelState = pendingResponse.duelState;
+
+    // 检查是否是当前该出牌的玩家
+    if (duelState.currentTurnId !== playerId) {
+      console.log(`respondToDuel 失败: 不是 ${player.character.name} 的回合`);
+      return false;
+    }
+
+    if (cardId) {
+      // 玩家打出了杀
+      const attackCard = player.handCards.find(c => c.id === cardId);
+      if (!attackCard) {
+        console.log(`respondToDuel 失败: 找不到卡牌`);
+        return false;
+      }
+
+      // 验证是否是杀（普通杀、雷杀、火杀都可以）
+      const isValidAttack = attackCard.name === BasicCardName.ATTACK ||
+        attackCard.name === BasicCardName.THUNDER_ATTACK ||
+        attackCard.name === BasicCardName.FIRE_ATTACK_CARD;
+
+      if (!isValidAttack) {
+        console.log(`respondToDuel 失败: 不是杀牌`);
+        return false;
+      }
+
+      // 移除打出的杀
+      const cardIndex = player.handCards.findIndex(c => c.id === cardId);
+      if (cardIndex !== -1) {
+        const playedCard = player.handCards.splice(cardIndex, 1)[0];
+        this.state.discardPile.push(playedCard);
+        this.saveDiscardPileState(`${player.character.name}决斗出杀`, [playedCard]);
+      }
+
+      const otherPlayer = playerId === challenger.id ? target : challenger;
+      const logMessage = `${player.character.name} 打出【${attackCard.name}】，${otherPlayer.character.name} 需要继续出杀`;
+      console.log(logMessage);
+
+      // 触发监听器通知 UI 更新
+      this.actionListeners.forEach(listener => listener({
+        action: GameAction.PLAY_CARD,
+        playerId: player.id,
+        cardId: cardId,
+        cardName: attackCard.name,
+        targetIds: [otherPlayer.id],
+        isResponse: true,
+        logMessage: logMessage,
+      }));
+
+      // 切换回合到另一方
+      duelState.currentTurnId = otherPlayer.id;
+      duelState.round++;
+      pendingResponse.request.targetPlayerId = otherPlayer.id;
+
+      // 如果另一方是AI，自动响应
+      if (otherPlayer.isAI) {
+        setTimeout(() => {
+          this.processDuelResponse(otherPlayer);
+        }, 800);
+      }
+
+      return true;
+    } else {
+      // 玩家选择不出杀，受到伤害
+      const otherPlayer = playerId === challenger.id ? target : challenger;
+      const logMessage = `${player.character.name} 没有打出【杀】，受到【决斗】的 1 点伤害`;
+      console.log(logMessage);
+
+      // 造成伤害（由对方造成）
+      this.dealDamage(otherPlayer.id, playerId, 1);
+
+      // 检查游戏是否已经结束
+      if (this.state.phase === GamePhase.GAME_OVER) {
+        console.log('游戏已结束，决斗终止');
+        return true;
+      }
+
+      // 结束决斗
+      pendingResponse.resolved = true;
+      pendingResponse.result = false;
+      this.state.pendingResponse = undefined;
+      this.state.phase = GamePhase.PLAY;
+
+      // 触发监听器通知 UI 更新
+      this.actionListeners.forEach(listener => listener({
+        action: GameAction.PLAY_CARD,
+        playerId: player.id,
+        cardName: '决斗',
+        targetIds: [otherPlayer.id],
+        isResponse: true,
+        logMessage: logMessage,
+      }));
+
+      return true;
+    }
+  }
+
+  // AI决斗响应处理
+  private processDuelResponse(player: Player): void {
+    const pendingResponse = this.state.pendingResponse;
+    if (!pendingResponse || !pendingResponse.duelState) return;
+
+    console.log(`AI ${player.character.name} 正在考虑是否出杀响应决斗...`);
+
+    // 检查手牌中是否有杀
+    const attackCard = player.handCards.find(c =>
+      c.name === BasicCardName.ATTACK ||
+      c.name === BasicCardName.THUNDER_ATTACK ||
+      c.name === BasicCardName.FIRE_ATTACK_CARD
+    );
+
+    if (attackCard) {
+      // AI有杀，90%概率打出（决斗中通常愿意出杀）
+      if (Math.random() < 0.9) {
+        setTimeout(() => {
+          console.log(`AI ${player.character.name} 选择打出【${attackCard.name}】响应决斗`);
+          this.respondToDuel(player.id, attackCard.id);
+        }, 1000);
+        return;
+      } else {
+        console.log(`AI ${player.character.name} 选择不出杀`);
+      }
+    } else {
+      console.log(`AI ${player.character.name} 没有杀`);
+    }
+
+    // AI不出杀或没有杀
+    setTimeout(() => {
+      this.respondToDuel(player.id);
+    }, 1000);
   }
 
   // AI无懈可击响应处理
