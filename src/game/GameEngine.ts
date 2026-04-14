@@ -1762,13 +1762,17 @@ export class GameEngine {
       // 检查是否是无懈可击响应类型
       if (pendingResponse.request.responseType !== ResponseType.NULLIFY) return;
 
-      // 随机决定是否使用无懈可击（简化版）
-      // 其他玩家有30%概率使用无懈可击来阻止锦囊牌
+      // 根据盟友关系决定是否使用无懈可击
       for (const player of playersWithNullification) {
         const nullificationCard = player.handCards.find(
           c => c.name === SpellCardName.NULLIFICATION
         );
-        if (nullificationCard && Math.random() < 0.3) {
+        if (!nullificationCard) continue;
+
+        // 判断是否应该使用无懈可击
+        const shouldUseNullification = this.shouldUseNullification(player, sourcePlayer, spellCard);
+        
+        if (shouldUseNullification) {
           console.log(`AI ${player.character.name} 打出【无懈可击】抵消【${spellCard.name}】`);
           this.respondToNullification(player.id, nullificationCard.id);
           return;
@@ -1779,6 +1783,103 @@ export class GameEngine {
       console.log(`没有无懈可击响应，【${spellCard.name}】生效`);
       this.resolveSpellCardEffect();
     }, 1500);
+  }
+
+  // 判断是否应使用无懈可击
+  private shouldUseNullification(player: Player, sourcePlayer: Player, spellCard: Card): boolean {
+    // 判断是否为盟友（主公和忠臣是盟友，反贼是盟友，内奸独立）
+    const isAlly = (identity1: Identity, identity2: Identity): boolean => {
+      // 主公和忠臣是盟友
+      if ((identity1 === Identity.LORD || identity1 === Identity.LOYALIST) &&
+          (identity2 === Identity.LORD || identity2 === Identity.LOYALIST)) {
+        return true;
+      }
+      // 反贼之间是盟友
+      if (identity1 === Identity.REBEL && identity2 === Identity.REBEL) {
+        return true;
+      }
+      return false;
+    };
+
+    const sourceIsAlly = isAlly(player.identity, sourcePlayer.identity);
+
+    // 根据锦囊牌类型和盟友关系决定是否使用无懈可击
+    switch (spellCard.name) {
+      case SpellCardName.DUEL:
+        // 决斗：如果是盟友被决斗，使用无懈可击保护；如果是敌人被决斗，不使用
+        // 决斗的目标在 request.targetPlayerId 中
+        const duelTarget = this.state.players.find(p => p.id === this.state.pendingResponse?.request.targetPlayerId);
+        if (duelTarget) {
+          const targetIsAlly = isAlly(player.identity, duelTarget.identity);
+          // 保护盟友，阻止对盟友的决斗
+          if (targetIsAlly && !sourceIsAlly) {
+            return Math.random() < 0.8; // 80%概率保护盟友
+          }
+        }
+        return false;
+
+      case SpellCardName.STEAL:
+      case SpellCardName.DISMANTLE:
+        // 顺手牵羊、过河拆桥：如果是盟友被针对，使用无懈可击
+        const target = this.state.players.find(p => p.id === this.state.pendingResponse?.request.targetPlayerId);
+        if (target) {
+          const targetIsAlly = isAlly(player.identity, target.identity);
+          if (targetIsAlly && !sourceIsAlly) {
+            return Math.random() < 0.7; // 70%概率保护盟友
+          }
+        }
+        return false;
+
+      case SpellCardName.SAVAGE:
+      case SpellCardName.ARCHERY:
+        // 南蛮入侵、万箭齐发：AOE伤害
+        // 计算会对多少盟友造成伤害
+        let allyCount = 0;
+        let enemyCount = 0;
+        for (const p of this.state.players) {
+          if (p.isDead || p.id === sourcePlayer.id) continue;
+          if (isAlly(player.identity, p.identity)) {
+            allyCount++;
+          } else {
+            enemyCount++;
+          }
+        }
+        // 如果对盟友伤害大于对敌人伤害，使用无懈可击
+        if (allyCount > enemyCount) {
+          return Math.random() < 0.6;
+        }
+        return false;
+
+      case SpellCardName.DRAW_TWO:
+        // 无中生有：敌人获得牌，对自己不利
+        if (!sourceIsAlly) {
+          return Math.random() < 0.5; // 50%概率阻止敌人
+        }
+        return false;
+
+      case SpellCardName.PEACH_GARDEN:
+        // 桃园结义：回复体力
+        // 计算会对多少敌人回复体力
+        let enemyBenefit = 0;
+        for (const p of this.state.players) {
+          if (p.isDead) continue;
+          if (!isAlly(player.identity, p.identity) && p.character.hp < p.character.maxHp) {
+            enemyBenefit++;
+          }
+        }
+        // 如果敌人受益多，使用无懈可击
+        if (enemyBenefit >= 2) {
+          return Math.random() < 0.5;
+        }
+        return false;
+
+      default:
+        // 其他锦囊牌，根据盟友关系简单判断
+        if (!sourceIsAlly) {
+          return Math.random() < 0.3; // 30%概率阻止敌人
+        }
+        return false;
+    }
   }
 
   // 处理无懈可击响应
@@ -1879,12 +1980,13 @@ export class GameEngine {
       return true;
     }
 
-    // 检查是否创建了新的pendingResponse（多目标锦囊牌的情况）
+    // 检查是否创建了新的pendingResponse（多目标锦囊牌或决斗的情况）
     // 如果是多目标锦囊牌，startMultiTargetResponse会创建新的pendingResponse
-    if (this.state.pendingResponse && this.state.pendingResponse.multiTargetQueue) {
-      console.log(`【${cardName}】是多目标锦囊牌，继续多目标响应流程`);
+    // 如果是决斗，startDuel会创建新的pendingResponse（包含duelState）
+    if (this.state.pendingResponse && (this.state.pendingResponse.multiTargetQueue || this.state.pendingResponse.duelState)) {
+      console.log(`【${cardName}】需要继续响应流程`);
       // 不清除pendingResponse，不设置phase为PLAY，不触发监听器
-      // 多目标响应流程会自行处理
+      // 响应流程会自行处理
       return true;
     }
 

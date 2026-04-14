@@ -10,6 +10,7 @@ interface PlayerAvatarProps {
   showIdentity: boolean;
   isLord?: boolean;
   isSelectable?: boolean;
+  isUnselectable?: boolean;  // 当需要选择目标但不可选时（如距离不够）
   onClick?: () => void;
   setRef?: (el: HTMLElement | null) => void;
 }
@@ -22,6 +23,7 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
   showIdentity,
   isLord = false,
   isSelectable = false,
+  isUnselectable = false,
   onClick,
   setRef,
 }) => {
@@ -70,52 +72,73 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
   return (
     <div
       ref={setRef}
-      className={`player-avatar ${isCurrentTurn ? 'current-turn' : ''} ${isSelected ? 'selected' : ''} ${player.isDead ? 'dead' : ''} ${isHuman ? 'human' : ''} ${isSelectable ? 'selectable' : ''}`}
+      className={`player-avatar${isCurrentTurn ? ' current-turn' : ''}${isSelected ? ' selected' : ''}${player.isDead ? ' dead' : ''}${isHuman ? ' human' : ''}${isSelectable ? ' selectable' : ''}${isUnselectable ? ' unselectable' : ''}`}
       onClick={onClick}
     >
+      {/* 左上角 - 武将名称（纵向排列） */}
+      <div className="player-name-vertical">
+        {player.character.name}
+        {isLord && <span className="lord-badge">主</span>}
+      </div>
+
+      {/* 右上角 - 身份（纵向排列） */}
+      {showIdentity && (
+        <div className={`player-identity-vertical ${getIdentityClass(player.identity)}`}>
+          {getIdentityText(player.identity)}
+        </div>
+      )}
+
+      {/* 中央 - 头像 */}
       <div className={`avatar-image ${isLord ? 'lord-avatar' : ''}`}>
         {player.character.name[0]}
         {isLord && <span className="lord-crown">👑</span>}
       </div>
-      <div className="player-name">
-        {player.character.name}
-        {isLord && <span className="lord-badge">主公</span>}
-      </div>
-      {showIdentity && (
-        <div className={`player-identity ${getIdentityClass(player.identity)}`}>
-          {getIdentityText(player.identity)}
-        </div>
-      )}
-      <div className="player-hp">{renderHearts()}</div>
+
+      {/* 手牌数量 */}
       <div className="player-cards">手牌: {player.handCards.length}</div>
-      
-      {/* 装备区 */}
+
+      {/* 右下角 - 体力（纵向排列） */}
+      <div className="player-hp-vertical">{renderHearts()}</div>
+
+      {/* 装备区 - 三排：武器、防具、马匹 */}
       <div className="player-equipment">
-        {player.equipment.weapon && (
-          <div className="equipment-item weapon" title={player.equipment.weapon.description}>
-            ⚔️ {player.equipment.weapon.suit}{player.equipment.weapon.number} {player.equipment.weapon.name} (距离{player.equipment.weapon.range})
-          </div>
-        )}
-        {player.equipment.armor && (
-          <div className="equipment-item armor" title={player.equipment.armor.description}>
-            🛡️ {player.equipment.armor.suit}{player.equipment.armor.number} {player.equipment.armor.name}
-          </div>
-        )}
-        {/* 加一马和减一马放在一排 */}
-        {(player.equipment.horsePlus || player.equipment.horseMinus) && (
-          <div className="equipment-row horses-row">
-            {player.equipment.horsePlus && (
-              <div className="equipment-item horse horse-plus" title={player.equipment.horsePlus.description}>
-                🐴 {player.equipment.horsePlus.suit}{player.equipment.horsePlus.number} +1马 ({player.equipment.horsePlus.name})
-              </div>
-            )}
-            {player.equipment.horseMinus && (
-              <div className="equipment-item horse horse-minus" title={player.equipment.horseMinus.description}>
-                🐴 {player.equipment.horseMinus.suit}{player.equipment.horseMinus.number} -1马 ({player.equipment.horseMinus.name})
-              </div>
-            )}
-          </div>
-        )}
+        {/* 第一排：武器 */}
+        <div className="equipment-slot">
+          {player.equipment.weapon ? (
+            <div className="equipment-item weapon" title={player.equipment.weapon.description}>
+              ⚔️ {player.equipment.weapon.name}
+            </div>
+          ) : (
+            <div className="equipment-item equipment-placeholder" />
+          )}
+        </div>
+        {/* 第二排：防具 */}
+        <div className="equipment-slot">
+          {player.equipment.armor ? (
+            <div className="equipment-item armor" title={player.equipment.armor.description}>
+              🛡️ {player.equipment.armor.name}
+            </div>
+          ) : (
+            <div className="equipment-item equipment-placeholder" />
+          )}
+        </div>
+        {/* 第三排：马匹（+1马和-1马在同一排） */}
+        <div className="equipment-slot horses-slot">
+          {player.equipment.horsePlus ? (
+            <div className="equipment-item horse horse-plus" title={player.equipment.horsePlus.description}>
+              🐴+1
+            </div>
+          ) : (
+            <div className="equipment-item equipment-placeholder" />
+          )}
+          {player.equipment.horseMinus ? (
+            <div className="equipment-item horse horse-minus" title={player.equipment.horseMinus.description}>
+              🐴-1
+            </div>
+          ) : (
+            <div className="equipment-item equipment-placeholder" />
+          )}
+        </div>
       </div>
     </div>
   );

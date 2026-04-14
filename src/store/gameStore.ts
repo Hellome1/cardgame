@@ -372,7 +372,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!pendingResponse) return;
 
     // 获取当前需要响应的玩家
-    const targetPlayer = gameState.players.find(p => p.id === pendingResponse.request.targetPlayerId);
+    let targetPlayerId = pendingResponse.request.targetPlayerId;
+    
+    // 对于决斗，使用 duelState.currentTurnId 确定当前该出牌的玩家
+    if (pendingResponse.request.responseType === ResponseType.DUEL && pendingResponse.duelState) {
+      targetPlayerId = pendingResponse.duelState.currentTurnId;
+    }
+    
+    const targetPlayer = gameState.players.find(p => p.id === targetPlayerId);
     if (!targetPlayer) return;
 
     // 对于无懈可击响应，任何玩家都可以响应，获取当前人类玩家
