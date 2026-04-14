@@ -102,8 +102,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       switch (action.action) {
         case GameAction.PLAY_CARD: {
-          // 如果有预定义的日志消息（如响应结果），直接使用
-          if (action.logMessage) {
+          // 如果是锦囊牌效果执行后的结果通知，跳过默认日志生成
+          // 因为详细日志已经在效果执行时发送了
+          if (action.isEffectResult) {
+            // 使用提供的日志消息，但不生成额外的默认日志
+            if (action.logMessage) {
+              logMessage = action.logMessage;
+            }
+          } else if (action.logMessage) {
+            // 如果有预定义的日志消息（如响应结果），直接使用
             logMessage = action.logMessage;
           } else {
             // 使用action中传递的cardName
@@ -373,12 +380,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // 获取当前需要响应的玩家
     let targetPlayerId = pendingResponse.request.targetPlayerId;
-    
+
     // 对于决斗，使用 duelState.currentTurnId 确定当前该出牌的玩家
     if (pendingResponse.request.responseType === ResponseType.DUEL && pendingResponse.duelState) {
       targetPlayerId = pendingResponse.duelState.currentTurnId;
     }
-    
+
     const targetPlayer = gameState.players.find(p => p.id === targetPlayerId);
     if (!targetPlayer) return;
 

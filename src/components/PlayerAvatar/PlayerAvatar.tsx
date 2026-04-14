@@ -78,62 +78,66 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
       {/* 左上角 - 武将名称（纵向排列） */}
       <div className="player-name-vertical">
         {player.character.name}
-        {isLord && <span className="lord-badge">主</span>}
       </div>
 
-      {/* 右上角 - 身份（纵向排列） */}
-      {showIdentity && (
-        <div className={`player-identity-vertical ${getIdentityClass(player.identity)}`}>
-          {getIdentityText(player.identity)}
+      {/* 中央区域 - 头像和手牌（在整个武将牌中居中） */}
+      <div className="player-center-content">
+        <div className={`avatar-image ${isLord ? 'lord-avatar' : ''}`}>
+          {player.character.name[0]}
         </div>
-      )}
-
-      {/* 中央 - 头像 */}
-      <div className={`avatar-image ${isLord ? 'lord-avatar' : ''}`}>
-        {player.character.name[0]}
-        {isLord && <span className="lord-crown">👑</span>}
+        <div className="player-cards">手牌: {player.handCards.length}</div>
       </div>
 
-      {/* 手牌数量 */}
-      <div className="player-cards">手牌: {player.handCards.length}</div>
-
-      {/* 右下角 - 体力（纵向排列） */}
-      <div className="player-hp-vertical">{renderHearts()}</div>
+      {/* 右侧边栏 - 身份和血条 */}
+      <div className="player-sidebar">
+        {showIdentity && (
+          <div className={`player-identity-vertical ${getIdentityClass(player.identity)}`}>
+            {getIdentityText(player.identity)}
+          </div>
+        )}
+        <div className="player-hp-vertical">{renderHearts()}</div>
+      </div>
 
       {/* 装备区 - 三排：武器、防具、马匹 */}
       <div className="player-equipment">
-        {/* 第一排：武器 */}
         <div className="equipment-slot">
           {player.equipment.weapon ? (
             <div className="equipment-item weapon" title={player.equipment.weapon.description}>
-              ⚔️ {player.equipment.weapon.name}
+              <span className="equipment-icon">⚔️</span>
+              <span className="equipment-name">{player.equipment.weapon.name}</span>
+              <span className="equipment-range">[{player.equipment.weapon.range}]</span>
+              <span className="equipment-suit">{player.equipment.weapon.suit}{player.equipment.weapon.number}</span>
             </div>
           ) : (
             <div className="equipment-item equipment-placeholder" />
           )}
         </div>
-        {/* 第二排：防具 */}
         <div className="equipment-slot">
           {player.equipment.armor ? (
             <div className="equipment-item armor" title={player.equipment.armor.description}>
-              🛡️ {player.equipment.armor.name}
+              <span className="equipment-icon">🛡️</span>
+              <span className="equipment-name">{player.equipment.armor.name}</span>
+              <span className="equipment-suit">{player.equipment.armor.suit}{player.equipment.armor.number}</span>
             </div>
           ) : (
             <div className="equipment-item equipment-placeholder" />
           )}
         </div>
-        {/* 第三排：马匹（+1马和-1马在同一排） */}
         <div className="equipment-slot horses-slot">
           {player.equipment.horsePlus ? (
             <div className="equipment-item horse horse-plus" title={player.equipment.horsePlus.description}>
-              🐴+1
+              <span className="equipment-icon">🐴</span>
+              <span className="equipment-name">+1马</span>
+              <span className="equipment-suit">{player.equipment.horsePlus.suit}{player.equipment.horsePlus.number}</span>
             </div>
           ) : (
             <div className="equipment-item equipment-placeholder" />
           )}
           {player.equipment.horseMinus ? (
             <div className="equipment-item horse horse-minus" title={player.equipment.horseMinus.description}>
-              🐴-1
+              <span className="equipment-icon">🐴</span>
+              <span className="equipment-name">-1马</span>
+              <span className="equipment-suit">{player.equipment.horseMinus.suit}{player.equipment.horseMinus.number}</span>
             </div>
           ) : (
             <div className="equipment-item equipment-placeholder" />

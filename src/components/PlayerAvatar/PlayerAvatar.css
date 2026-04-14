@@ -1,7 +1,11 @@
 .player-avatar {
-  width: 120px;
+  width: 140px;
   height: 180px;
-  padding: 10px;
+  min-width: 140px;
+  min-height: 180px;
+  max-width: 140px;
+  max-height: 180px;
+  padding: 0;
   background: linear-gradient(135deg, #4a4a4a 0%, #2c2c2c 100%);
   border: 2px solid #666;
   border-radius: 10px;
@@ -11,9 +15,41 @@
   transition: all 0.2s ease;
   position: relative;
   display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: flex-start;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* 中央区域 - 头像和手牌（在整个武将牌中居中） */
+.player-center-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  z-index: 1;
+}
+
+/* 右侧边栏 */
+.player-sidebar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 4px 2px 4px 0;
+  box-sizing: border-box;
+  z-index: 2;
 }
 
 .player-avatar:hover {
@@ -95,13 +131,14 @@
 .player-name-vertical {
   position: absolute;
   top: 8px;
-  left: 8px;
+  left: 0px;
   writing-mode: vertical-rl;
   text-orientation: upright;
   font-size: 14px;
   font-weight: bold;
   color: white;
   letter-spacing: 2px;
+  z-index: 2;
 }
 
 .lord-badge {
@@ -113,15 +150,13 @@
   margin-top: 2px;
 }
 
-/* 右上角 - 身份（纵向排列） */
+/* 右侧边栏 - 身份（纵向排列） */
 .player-identity-vertical {
-  position: absolute;
-  top: 8px;
-  right: 8px;
   writing-mode: vertical-rl;
   text-orientation: upright;
   font-size: 12px;
-  letter-spacing: 2px;
+  letter-spacing: 0px;
+  margin-right: 0px;
 }
 
 /* 中央 - 头像 */
@@ -135,7 +170,8 @@
   justify-content: center;
   font-size: 24px;
   position: relative;
-  margin-bottom: 5px;
+  margin-bottom: 2px;
+  margin-top: -25px;
 }
 
 .avatar-image.lord-avatar {
@@ -154,22 +190,21 @@
 .player-cards {
   font-size: 11px;
   color: #ccc;
-  margin-bottom: 5px;
+  margin-bottom: 2px;
 }
 
-/* 右下角 - 体力（纵向排列） */
+/* 右侧边栏 - 体力（纵向排列） */
 .player-hp-vertical {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
   display: flex;
   flex-direction: column;
   gap: 1px;
+  margin-right: 0px;
 }
 
 .hp-heart {
   color: #f44336;
   font-size: 12px;
+  line-height: 12px;
 }
 
 .hp-heart.lost {
@@ -179,12 +214,53 @@
 /* 装备区 - 三排：武器、防具、马匹 */
 .player-equipment {
   position: absolute;
-  bottom: 8px;
-  left: 8px;
+  bottom: 4px;
+  left: 16px;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: calc(100% - 40px);
+  width: 108px;
+  z-index: 2;
+}
+
+/* 装备项样式 */
+.equipment-item {
+  font-size: 8px;
+  padding: 1px 3px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+  height: 18px;
+  line-height: 16px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.equipment-icon {
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.equipment-name {
+  flex-shrink: 0;
+}
+
+.equipment-range {
+  color: #ffeb3b;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.equipment-suit {
+  font-size: 7px;
+  opacity: 0.9;
+  flex-shrink: 0;
 }
 
 .equipment-slot {
@@ -197,20 +273,6 @@
   display: flex;
   flex-direction: row;
   gap: 2px;
-}
-
-.equipment-item {
-  font-size: 9px;
-  padding: 1px 4px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: help;
-  height: 16px;
-  line-height: 14px;
-  flex: 1;
 }
 
 .equipment-placeholder {

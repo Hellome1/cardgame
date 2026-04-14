@@ -1,6 +1,6 @@
 import {
   GameState, Player, Identity, GamePhase,
-  ActionRequest, GameAction, Card, CardType, BasicCardName, SpellCardName, ResponseType,
+  ActionRequest, GameAction, Card, CardType, CardSuit, CardColor, BasicCardName, SpellCardName, ResponseType,
   DuelState
 } from '../types/game';
 import { CardManager } from './CardManager';
@@ -424,6 +424,12 @@ export class GameEngine {
 
   // 出牌阶段
   playCard(playerId: string, cardId: string, targetIds?: string[]): boolean {
+    // 检查当前是否是出牌阶段
+    if (this.state.phase !== GamePhase.PLAY) {
+      console.log(`出牌失败: 当前不是出牌阶段，当前阶段是 ${this.state.phase}`);
+      return false;
+    }
+
     const player = this.state.players.find(p => p.id === playerId);
     if (!player || player.isDead) {
       console.log(`出牌失败: 玩家不存在或已死亡`);
@@ -446,8 +452,19 @@ export class GameEngine {
       return false;
     }
 
+    // 对于装备牌，保存日志消息到卡牌对象（在移除前）
+    let equipmentLogMessage: string | undefined;
+    if (card.type === CardType.EQUIPMENT) {
+      equipmentLogMessage = (card as any).logMessage;
+    }
+
     // 移除手牌
     player.handCards.splice(cardIndex, 1);
+
+    // 将日志消息重新附加到卡牌对象（用于executeAction获取）
+    if (equipmentLogMessage) {
+      (card as any).logMessage = equipmentLogMessage;
+    }
 
     // 装备牌会被executeEquipmentCard放到装备区，不需要再放到弃牌堆
     // 只有非装备牌才放到弃牌堆
@@ -518,6 +535,10 @@ export class GameEngine {
           return false;
         }
 
+        // 确定伤害类型
+        const damageType = card.name === BasicCardName.FIRE_ATTACK_CARD ? 'fire' :
+          card.name === BasicCardName.THUNDER_ATTACK ? 'thunder' : 'normal';
+
         console.log(`${player.character.name} 对 ${target.character.name} 使用${card.name}，等待对方响应...`);
 
         // 创建响应请求
@@ -529,6 +550,7 @@ export class GameEngine {
             responseCardName: BasicCardName.DODGE,
             damage: 1,
             responseType: ResponseType.DODGE,
+            damageType: damageType,
           },
           resolved: false,
           result: false,
@@ -714,11 +736,83 @@ export class GameEngine {
         return true;
 
       case SpellCardName.FIRE_ATTACK:
-        // 火攻：对目标造成1点伤害
+        // 火攻：目标展示一张手牌，使用者可弃置一张同花色手牌对其造成1点火焰伤害
         if (targets.length === 0) return false;
         const fireTarget = targets[0];
         if (fireTarget.isDead) return false;
-        this.dealDamage(player.id, fireTarget.id, 1);
+
+        // 检查目标是否有手牌
+        if (fireTarget.handCards.length === 0) {
+          console.log(`${fireTarget.character.name} 没有手牌，火攻无效`);
+          return false;
+        }
+
+        // 目标随机展示一张手牌
+        const shownCardIndex = Math.floor(Math.random() * fireTarget.handCards.length);
+        const shownCard = fireTarget.handCards[shownCardIndex];
+
+        console.log(`${fireTarget.character.name} 展示了手牌 [${shownCard.suit}${shownCard.number} ${shownCard.name}]`);
+
+        // 检查使用者是否有同花色的手牌（除了刚使用的火攻）
+        const sameSuitCards = player.handCards.filter(c =>
+          c.suit === shownCard.suit && c.id !== card.id
+        );
+
+        if (sameSuitCards.length === 0) {
+          console.log(`${player.character.name} 没有 ${shownCard.suit} 花色的手牌，无法造成伤害`);
+
+          // 通知前端显示详细日志（标记为效果结果，避免重复记录）
+          this.actionListeners.forEach(listener => listener({
+            action: GameAction.PLAY_CARD,
+            playerId: player.id,
+            cardId: card.id,
+            cardName: card.name,
+            targetIds: [fireTarget.id],
+            logMessage: `${player.character.name} 对 ${fireTarget.character.name} 使用了【火攻】，${fireTarget.character.name} 展示了 [${shownCard.suit}${shownCard.number} ${shownCard.name}]，但 ${player.character.name} 没有同花色手牌`,
+            isEffectResult: true,
+          }));
+
+          return true; // 火攻仍然算使用成功，只是没有伤害
+        }
+
+        // 进入火攻响应阶段
+        this.state.phase = GamePhase.RESPONSE;
+        this.state.pendingResponse = {
+          request: {
+            targetPlayerId: player.id,
+            sourcePlayerId: fireTarget.id,
+            cardName: '火攻',
+            responseCardName: `弃置一张${shownCard.suit}花色的手牌造成火焰伤害`,
+            damage: 1,
+            responseType: ResponseType.FIRE_ATTACK,
+          },
+          resolved: false,
+          result: false,
+          fireAttackState: {
+            sourceId: player.id,
+            targetId: fireTarget.id,
+            shownCard: shownCard,
+          },
+        };
+
+        // 通知前端进入火攻响应阶段（标记为效果结果，避免重复记录）
+        this.actionListeners.forEach(listener => listener({
+          action: GameAction.PLAY_CARD,
+          playerId: player.id,
+          cardId: card.id,
+          cardName: card.name,
+          targetIds: [fireTarget.id],
+          logMessage: `${player.character.name} 对 ${fireTarget.character.name} 使用了【火攻】，${fireTarget.character.name} 展示了 [${shownCard.suit}${shownCard.number} ${shownCard.name}]`,
+          isEffectResult: true,
+        }));
+
+        // 如果是AI使用，自动选择一张同花色牌弃置
+        if (player.isAI) {
+          setTimeout(() => {
+            this.processFireAttackResponse(player, shownCard.suit);
+          }, 1000);
+        }
+
         return true;
 
       case SpellCardName.STEAL:
@@ -784,7 +878,19 @@ export class GameEngine {
 
         // 加入自己的手牌
         player.handCards.push(stolenCard);
-        console.log(`${player.character.name} 从 ${stealTarget.character.name} 处获得了 ${stolenCard.name}`);
+        const cardSource = stolenItem.type === 'hand' ? '手牌' : '装备区';
+        console.log(`${player.character.name} 从 ${stealTarget.character.name} 的${cardSource}获得了【${stolenCard.suit}${stolenCard.number} ${stolenCard.name}】`);
+
+        // 通知前端显示详细日志（标记为效果结果，避免重复记录）
+        this.actionListeners.forEach(listener => listener({
+          action: GameAction.PLAY_CARD,
+          playerId: player.id,
+          cardId: card.id,
+          cardName: card.name,
+          targetIds: [stealTarget.id],
+          logMessage: `${player.character.name} 对 ${stealTarget.character.name} 使用了【顺手牵羊】，从${cardSource}获得了【${stolenCard.suit}${stolenCard.number} ${stolenCard.name}】`,
+          isEffectResult: true,
+        }));
 
         // 顺手牵羊只是转移牌，不影响牌堆和弃牌堆数量，不记录
         return true;
@@ -839,19 +945,50 @@ export class GameEngine {
 
         // 放入弃牌堆
         this.state.discardPile.push(dismantleItem.card);
-        console.log(`${player.character.name} 弃置了 ${dismantleTarget.character.name} 的 ${dismantleItem.card.name}`);
+        const dismantleCardSource = dismantleItem.type === 'hand' ? '手牌' : '装备区';
+        console.log(`${player.character.name} 弃置了 ${dismantleTarget.character.name} ${dismantleCardSource}中的【${dismantleItem.card.suit}${dismantleItem.card.number} ${dismantleItem.card.name}】`);
 
         // 记录弃牌堆变化
         this.saveDiscardPileState(`${player.character.name}过河拆桥`, [dismantleItem.card]);
+
+        // 通知前端显示详细日志（标记为效果结果，避免重复记录）
+        this.actionListeners.forEach(listener => listener({
+          action: GameAction.PLAY_CARD,
+          playerId: player.id,
+          cardId: card.id,
+          cardName: card.name,
+          targetIds: [dismantleTarget.id],
+          logMessage: `${player.character.name} 对 ${dismantleTarget.character.name} 使用了【过河拆桥】，弃置了${dismantleCardSource}中的【${dismantleItem.card.suit}${dismantleItem.card.number} ${dismantleItem.card.name}】`,
+          isEffectResult: true,
+        }));
+
         return true;
 
       case SpellCardName.PEACH_GARDEN:
         // 桃园结义：所有角色回复1点体力
+        const healedPlayers = this.state.players.filter(p => !p.isDead && p.character.hp < p.character.maxHp);
+        const healedNames = healedPlayers.map(p => p.character.name).join('、');
+
         this.state.players.forEach(p => {
           if (!p.isDead && p.character.hp < p.character.maxHp) {
             this.heal(p.id, 1);
           }
         });
+
+        // 通知前端显示详细日志（标记为效果结果，避免重复记录）
+        const peachGardenLog = healedNames
+          ? `${player.character.name} 使用了【桃园结义】，${healedNames} 回复了1点体力`
+          : `${player.character.name} 使用了【桃园结义】，但所有角色体力已满`;
+
+        this.actionListeners.forEach(listener => listener({
+          action: GameAction.PLAY_CARD,
+          playerId: player.id,
+          cardId: card.id,
+          cardName: card.name,
+          logMessage: peachGardenLog,
+          isEffectResult: true,
+        }));
+
         return true;
 
       case SpellCardName.ARCHERY:
@@ -867,7 +1004,20 @@ export class GameEngine {
         const { cards } = this.cardManager.draw(this.state.deck, 2);
         player.handCards.push(...cards);
         this.state.deck = this.state.deck.slice(2);
-        console.log(`${player.character.name} 摸了 ${cards.length} 张牌`);
+
+        // 构建摸到牌的描述
+        const drawnCardsDesc = cards.map(c => `【${c.suit}${c.number} ${c.name}】`).join('、');
+        console.log(`${player.character.name} 摸了 ${cards.length} 张牌：${drawnCardsDesc}`);
+
+        // 通知前端显示详细日志（标记为效果结果，避免重复记录）
+        this.actionListeners.forEach(listener => listener({
+          action: GameAction.PLAY_CARD,
+          playerId: player.id,
+          cardId: card.id,
+          cardName: card.name,
+          logMessage: `${player.character.name} 使用了【无中生有】，摸到了${drawnCardsDesc}`,
+          isEffectResult: true,
+        }));
 
         // 记录牌堆变化
         this.saveDeckState(`${player.character.name}无中生有`, cards);
@@ -902,17 +1052,26 @@ export class GameEngine {
     }
 
     // 如果有旧装备，先弃置
+    let logMessage: string;
     if (currentEquipment) {
       this.state.discardPile.push(currentEquipment);
-      console.log(`${player.character.name} 弃置了旧装备 ${currentEquipment.name}`);
+      console.log(`${player.character.name} 替换装备：弃置了【${currentEquipment.suit}${currentEquipment.number} ${currentEquipment.name}】，装备了【${card.suit}${card.number} ${card.name}】`);
 
       // 记录弃牌堆变化
       this.saveDiscardPileState(`${player.character.name}替换装备`, [currentEquipment]);
+      logMessage = `${player.character.name} 替换装备：弃置了【${currentEquipment.suit}${currentEquipment.number} ${currentEquipment.name}】，装备了【${card.suit}${card.number} ${card.name}】`;
+    } else {
+      console.log(`${player.character.name} 装备了【${card.suit}${card.number} ${card.name}】`);
+      logMessage = `${player.character.name} 装备了【${card.suit}${card.number} ${card.name}】`;
     }
 
     // 装备新牌
     player.equipment[equipmentKey] = card;
-    console.log(`${player.character.name} 装备了 ${card.name} [ID:${card.id}, ${card.suit}${card.number}]`);
+
+    // 不直接调用监听器，让 executeAction 统一处理
+    // 通过设置 logMessage 到 card 对象，让 executeAction 可以获取到
+    (card as any).logMessage = logMessage;
+
     return true;
   }
 
@@ -1051,20 +1210,23 @@ export class GameEngine {
   }
 
   // 造成伤害
-  dealDamage(fromId: string, toId: string, amount: number): void {
+  dealDamage(fromId: string, toId: string, amount: number, damageType?: 'normal' | 'fire' | 'thunder'): void {
     const fromPlayer = this.state.players.find(p => p.id === fromId);
     const target = this.state.players.find(p => p.id === toId);
     if (!target || target.isDead) return;
 
     target.character.hp -= amount;
-    console.log(`${target.character.name} 受到 ${amount} 点伤害，剩余体力: ${target.character.hp}`);
+
+    // 根据伤害类型显示不同日志
+    const damageTypeText = damageType === 'fire' ? '火焰' : damageType === 'thunder' ? '雷电' : '';
+    console.log(`${target.character.name} 受到 ${amount} 点${damageTypeText}伤害，剩余体力: ${target.character.hp}`);
 
     // 触发受伤技能（简化版）
-    this.triggerSkill(target, 'ON_DAMAGE', { fromPlayer, amount });
+    this.triggerSkill(target, 'ON_DAMAGE', { fromPlayer, amount, damageType });
 
     if (target.character.hp <= 0) {
       console.log(`${target.character.name} 体力降至0或以下，准备处理死亡`);
-      this.handleDeath(target);
+      this.handleDeath(target, fromId);
     }
   }
 
@@ -1106,7 +1268,7 @@ export class GameEngine {
   }
 
   // 处理死亡
-  private handleDeath(player: Player): void {
+  private handleDeath(player: Player, fromId?: string): void {
     player.isDead = true;
     console.log(`${player.character.name} 阵亡！`);
 
@@ -1152,8 +1314,71 @@ export class GameEngine {
     // 记录弃牌堆变化
     this.saveDiscardPileState(`${player.character.name}阵亡弃牌`, discardedCards);
 
+    // 检查是否是主公杀死了忠臣
+    if (fromId) {
+      const fromPlayer = this.state.players.find(p => p.id === fromId);
+      if (fromPlayer && fromPlayer.identity === Identity.LORD && player.identity === Identity.LOYALIST) {
+        console.log(`${fromPlayer.character.name}(主公) 杀死了 ${player.character.name}(忠臣)，需要弃置所有手牌和装备！`);
+        this.discardAllCardsAndEquipment(fromPlayer);
+      }
+    }
+
     // 检查游戏结束
     this.checkGameOver();
+  }
+
+  // 弃置所有手牌和装备（主公杀死忠臣时）
+  private discardAllCardsAndEquipment(player: Player): void {
+    const discardedCards: Card[] = [];
+
+    // 弃置所有手牌
+    if (player.handCards.length > 0) {
+      discardedCards.push(...player.handCards);
+      this.state.discardPile.push(...player.handCards);
+      console.log(`${player.character.name} 弃置了 ${player.handCards.length} 张手牌`);
+      player.handCards = [];
+    }
+
+    // 弃置所有装备
+    if (player.equipment.weapon) {
+      discardedCards.push(player.equipment.weapon);
+      this.state.discardPile.push(player.equipment.weapon);
+      console.log(`${player.character.name} 弃置了武器 ${player.equipment.weapon.name}`);
+      player.equipment.weapon = undefined;
+    }
+    if (player.equipment.armor) {
+      discardedCards.push(player.equipment.armor);
+      this.state.discardPile.push(player.equipment.armor);
+      console.log(`${player.character.name} 弃置了防具 ${player.equipment.armor.name}`);
+      player.equipment.armor = undefined;
+    }
+    if (player.equipment.horsePlus) {
+      discardedCards.push(player.equipment.horsePlus);
+      this.state.discardPile.push(player.equipment.horsePlus);
+      console.log(`${player.character.name} 弃置了+1马 ${player.equipment.horsePlus.name}`);
+      player.equipment.horsePlus = undefined;
+    }
+    if (player.equipment.horseMinus) {
+      discardedCards.push(player.equipment.horseMinus);
+      this.state.discardPile.push(player.equipment.horseMinus);
+      console.log(`${player.character.name} 弃置了-1马 ${player.equipment.horseMinus.name}`);
+      player.equipment.horseMinus = undefined;
+    }
+
+    // 记录弃牌堆变化
+    if (discardedCards.length > 0) {
+      this.saveDiscardPileState(`${player.character.name}(主公杀忠臣)弃置所有牌`, discardedCards);
+
+      // 通知前端
+      this.actionListeners.forEach(listener => listener({
+        action: GameAction.DISCARD_CARD,
+        playerId: player.id,
+        cardId: '',
+        cardName: '主公杀忠臣惩罚',
+        targetIds: [],
+        logMessage: `${player.character.name}(主公) 杀死忠臣，弃置所有手牌和装备`,
+      }));
+    }
   }
 
   // 检查游戏结束
@@ -1225,12 +1450,19 @@ export class GameEngine {
 
   // 执行动作
   executeAction(action: ActionRequest): boolean {
-    // 在执行动作前获取卡牌名称（因为执行后卡牌可能从手牌移除）
+    // 在执行动作前获取卡牌名称和日志消息（因为执行后卡牌可能从手牌移除）
     let cardName: string | undefined = action.cardName;
+    let equipmentLogMessage: string | undefined;
+    let isSpellCard = false;
     if (action.action === GameAction.PLAY_CARD && action.cardId && !cardName) {
       const player = this.state.players.find(p => p.id === action.playerId);
       const card = player?.handCards.find(c => c.id === action.cardId);
       cardName = card?.name;
+      // 获取装备牌的日志消息（如果有）
+      equipmentLogMessage = (card as any)?.logMessage;
+      // 检查是否是锦囊牌（需要无懈可击响应的牌）
+      isSpellCard = card?.type === CardType.SPELL &&
+        card.name !== SpellCardName.NULLIFICATION;
     }
 
     let success = false;
@@ -1252,12 +1484,24 @@ export class GameEngine {
     }
 
     if (success) {
-      // 补充 cardName 到 action 中，用于动画显示
-      const actionWithCardName: ActionRequest = {
-        ...action,
-        cardName: cardName,
-      };
-      this.actionListeners.forEach(listener => listener(actionWithCardName));
+      // 对于锦囊牌（需要无懈可击响应的），不在这里发送通知
+      // 因为详细日志会在 executeSpellEffect 中发送
+      if (isSpellCard) {
+        // 只更新状态，不发送日志通知
+        this.actionListeners.forEach(listener => listener({
+          ...action,
+          cardName: cardName,
+          isEffectResult: true, // 标记为效果结果，避免生成额外日志
+        }));
+      } else {
+        // 补充 cardName 和日志消息到 action 中
+        const actionWithCardName: ActionRequest = {
+          ...action,
+          cardName: cardName,
+          logMessage: action.logMessage || equipmentLogMessage,
+        };
+        this.actionListeners.forEach(listener => listener(actionWithCardName));
+      }
     }
 
     return success;
@@ -1355,11 +1599,13 @@ export class GameEngine {
       }
     } else {
       // 玩家选择不响应
-      const logMessage = `${targetPlayer.character.name} 没有打出【${pendingResponse.request.responseCardName}】，受到${pendingResponse.request.damage}点伤害`;
+      const damageType = pendingResponse.request.damageType;
+      const damageTypeText = damageType === 'fire' ? '火焰' : damageType === 'thunder' ? '雷电' : '';
+      const logMessage = `${targetPlayer.character.name} 没有打出【${pendingResponse.request.responseCardName}】，受到${pendingResponse.request.damage}点${damageTypeText}伤害`;
       console.log(logMessage);
 
-      // 造成伤害
-      this.dealDamage(pendingResponse.request.sourcePlayerId, playerId, pendingResponse.request.damage);
+      // 造成伤害（带伤害类型）
+      this.dealDamage(pendingResponse.request.sourcePlayerId, playerId, pendingResponse.request.damage, damageType);
 
       // 检查游戏是否已经结束（造成伤害可能导致玩家死亡，进而结束游戏）
       if (this.state.phase === GamePhase.GAME_OVER) {
@@ -1477,8 +1723,17 @@ export class GameEngine {
         logMessage: `【${pendingResponse.request.cardName}】结算完成`,
       }));
 
-      // 继续游戏流程
-      this.processTurn();
+      // 获取使用锦囊牌的玩家
+      const sourcePlayer = this.state.players.find(p => p.id === pendingResponse.request.sourcePlayerId);
+
+      // 只有当使用锦囊牌的玩家是人类玩家时，才需要调用processTurn继续游戏流程
+      // 如果是AI玩家，AI的出牌循环(playCards)会继续处理，不需要额外调用processTurn
+      if (sourcePlayer && !sourcePlayer.isAI) {
+        console.log(`【${pendingResponse.request.cardName}】由人类玩家使用，继续游戏流程`);
+        this.processTurn();
+      } else {
+        console.log(`【${pendingResponse.request.cardName}】由AI玩家使用，等待AI出牌循环继续`);
+      }
 
       return true;
     }
@@ -1735,9 +1990,115 @@ export class GameEngine {
     }, 1000);
   }
 
+  // 火攻响应处理（AI弃置同花色牌）
+  private processFireAttackResponse(player: Player, requiredSuit: string): void {
+    const pendingResponse = this.state.pendingResponse;
+    if (!pendingResponse || !pendingResponse.fireAttackState) return;
+
+    console.log(`AI ${player.character.name} 正在考虑是否弃置${requiredSuit}花色的手牌...`);
+
+    // 查找同花色的手牌
+    const sameSuitCards = player.handCards.filter(c => c.suit === requiredSuit);
+
+    if (sameSuitCards.length > 0) {
+      // AI有同花色牌，80%概率弃置造成伤害
+      if (Math.random() < 0.8) {
+        const cardToDiscard = sameSuitCards[0];
+        setTimeout(() => {
+          console.log(`AI ${player.character.name} 弃置了【${cardToDiscard.name}】造成火焰伤害`);
+          this.respondToFireAttack(player.id, cardToDiscard.id);
+        }, 1000);
+        return;
+      } else {
+        console.log(`AI ${player.character.name} 选择不弃牌`);
+      }
+    } else {
+      console.log(`AI ${player.character.name} 没有${requiredSuit}花色的手牌`);
+    }
+
+    // AI不弃牌
+    setTimeout(() => {
+      this.respondToFireAttack(player.id);
+    }, 1000);
+  }
+
+  // 响应火攻（弃置同花色牌造成火焰伤害）
+  public respondToFireAttack(playerId: string, cardId?: string): boolean {
+    const pendingResponse = this.state.pendingResponse;
+    if (!pendingResponse || !pendingResponse.fireAttackState) {
+      console.log('没有待处理的火攻响应');
+      return false;
+    }
+
+    const { sourceId, targetId, shownCard } = pendingResponse.fireAttackState;
+    const player = this.state.players.find(p => p.id === playerId);
+
+    if (!player || player.id !== sourceId) {
+      console.log('不是火攻使用者，无法响应');
+      return false;
+    }
+
+    if (cardId) {
+      // 弃置指定牌造成火焰伤害
+      const cardIndex = player.handCards.findIndex(c => c.id === cardId);
+      if (cardIndex === -1) {
+        console.log('找不到指定的手牌');
+        return false;
+      }
+
+      const discardedCard = player.handCards[cardIndex];
+
+      // 检查花色是否匹配
+      if (discardedCard.suit !== shownCard.suit) {
+        console.log(`弃置的牌花色不匹配，需要${shownCard.suit}，实际${discardedCard.suit}`);
+        return false;
+      }
+
+      // 弃置牌
+      player.handCards.splice(cardIndex, 1);
+      this.state.discardPile.push(discardedCard);
+      this.saveDiscardPileState(`${player.character.name} 弃置手牌`, [discardedCard]);
+
+      console.log(`${player.character.name} 弃置了【${discardedCard.name}】对 ${this.state.players.find(p => p.id === targetId)?.character.name} 造成1点火焰伤害`);
+
+      // 造成火焰伤害
+      this.dealDamage(sourceId, targetId, 1, 'fire');
+
+      // 通知前端
+      this.actionListeners.forEach(listener => listener({
+        action: GameAction.DISCARD_CARD,
+        playerId: player.id,
+        cardId: discardedCard.id,
+        cardName: discardedCard.name,
+        logMessage: `${player.character.name} 弃置了【${discardedCard.suit}${discardedCard.number} ${discardedCard.name}】，对 ${this.state.players.find(p => p.id === targetId)?.character.name} 造成1点火焰伤害`,
+      }));
+    } else {
+      // 不弃牌，不造成伤害
+      console.log(`${player.character.name} 选择不弃牌，火攻结束`);
+    }
+
+    // 清除火攻状态
+    this.state.pendingResponse = undefined;
+    this.state.phase = GamePhase.PLAY;
+
+    return true;
+  }
+
   // AI无懈可击响应处理
   private processAINullificationResponse(sourcePlayer: Player, spellCard: Card): void {
-    // 立即检查所有AI玩家是否有无懈可击
+    // 检查是否有人类玩家（非AI）可以响应无懈可击
+    const humanPlayer = this.state.players.find(p => !p.isAI && !p.isDead);
+    const hasHumanNullification = humanPlayer && humanPlayer.handCards.some(c => c.name === SpellCardName.NULLIFICATION);
+
+    // 如果有人类玩家且有无懈可击，先等待人类玩家响应（通过UI）
+    if (hasHumanNullification) {
+      console.log(`等待人类玩家 ${humanPlayer.character.name} 决定是否使用无懈可击...`);
+      // 不自动执行，等待人类玩家通过UI响应
+      // 游戏进程在这里阻塞，直到人类玩家做出选择
+      return;
+    }
+
+    // 检查所有AI玩家是否有无懈可击（排除锦囊牌使用者自己）
     const otherPlayers = this.state.players.filter(p =>
       p.id !== sourcePlayer.id && !p.isDead && p.isAI
     );
@@ -1754,13 +2115,18 @@ export class GameEngine {
       return;
     }
 
+    // 获取锦囊牌的目标玩家（用于判断是否应该保护）
+    const pendingResponse = this.state.pendingResponse;
+    const targetPlayerId = pendingResponse?.request.targetPlayerId;
+    const targetPlayer = targetPlayerId ? this.state.players.find(p => p.id === targetPlayerId) : undefined;
+
     // 有AI玩家有无懈可击，延迟一下让他们有机会打出
     setTimeout(() => {
-      const pendingResponse = this.state.pendingResponse;
-      if (!pendingResponse || pendingResponse.resolved) return;
+      const currentPending = this.state.pendingResponse;
+      if (!currentPending || currentPending.resolved) return;
 
       // 检查是否是无懈可击响应类型
-      if (pendingResponse.request.responseType !== ResponseType.NULLIFY) return;
+      if (currentPending.request.responseType !== ResponseType.NULLIFY) return;
 
       // 根据盟友关系决定是否使用无懈可击
       for (const player of playersWithNullification) {
@@ -1769,9 +2135,9 @@ export class GameEngine {
         );
         if (!nullificationCard) continue;
 
-        // 判断是否应该使用无懈可击
-        const shouldUseNullification = this.shouldUseNullification(player, sourcePlayer, spellCard);
-        
+        // 判断是否应该使用无懈可击（传入目标玩家信息）
+        const shouldUseNullification = this.shouldUseNullification(player, sourcePlayer, spellCard, targetPlayer);
+
         if (shouldUseNullification) {
           console.log(`AI ${player.character.name} 打出【无懈可击】抵消【${spellCard.name}】`);
           this.respondToNullification(player.id, nullificationCard.id);
@@ -1780,18 +2146,18 @@ export class GameEngine {
       }
 
       // 没有AI打出无懈可击，执行锦囊牌效果
-      console.log(`没有无懈可击响应，【${spellCard.name}】生效`);
+      console.log(`没有AI使用无懈可击，【${spellCard.name}】生效`);
       this.resolveSpellCardEffect();
     }, 1500);
   }
 
   // 判断是否应使用无懈可击
-  private shouldUseNullification(player: Player, sourcePlayer: Player, spellCard: Card): boolean {
+  private shouldUseNullification(player: Player, sourcePlayer: Player, spellCard: Card, targetPlayer?: Player): boolean {
     // 判断是否为盟友（主公和忠臣是盟友，反贼是盟友，内奸独立）
     const isAlly = (identity1: Identity, identity2: Identity): boolean => {
       // 主公和忠臣是盟友
       if ((identity1 === Identity.LORD || identity1 === Identity.LOYALIST) &&
-          (identity2 === Identity.LORD || identity2 === Identity.LOYALIST)) {
+        (identity2 === Identity.LORD || identity2 === Identity.LOYALIST)) {
         return true;
       }
       // 反贼之间是盟友
@@ -1806,26 +2172,38 @@ export class GameEngine {
     // 根据锦囊牌类型和盟友关系决定是否使用无懈可击
     switch (spellCard.name) {
       case SpellCardName.DUEL:
-        // 决斗：如果是盟友被决斗，使用无懈可击保护；如果是敌人被决斗，不使用
-        // 决斗的目标在 request.targetPlayerId 中
-        const duelTarget = this.state.players.find(p => p.id === this.state.pendingResponse?.request.targetPlayerId);
+        // 决斗：如果是盟友被决斗，使用无懈可击保护
+        const duelTarget = targetPlayer || this.state.players.find(p => p.id === this.state.pendingResponse?.request.targetPlayerId);
         if (duelTarget) {
           const targetIsAlly = isAlly(player.identity, duelTarget.identity);
           // 保护盟友，阻止对盟友的决斗
           if (targetIsAlly && !sourceIsAlly) {
+            console.log(`  ${player.character.name} 考虑保护盟友 ${duelTarget.character.name} 免受决斗`);
             return Math.random() < 0.8; // 80%概率保护盟友
+          }
+          // 如果是敌人之间的决斗，不干预
+          if (!targetIsAlly && !sourceIsAlly) {
+            console.log(`  ${player.character.name} 看到敌人内斗，不干预`);
+            return false;
           }
         }
         return false;
 
       case SpellCardName.STEAL:
       case SpellCardName.DISMANTLE:
-        // 顺手牵羊、过河拆桥：如果是盟友被针对，使用无懈可击
-        const target = this.state.players.find(p => p.id === this.state.pendingResponse?.request.targetPlayerId);
-        if (target) {
-          const targetIsAlly = isAlly(player.identity, target.identity);
+        // 顺手牵羊、过河拆桥：如果是盟友被针对，使用无懈可击保护
+        const stealTarget = targetPlayer || this.state.players.find(p => p.id === this.state.pendingResponse?.request.targetPlayerId);
+        if (stealTarget) {
+          const targetIsAlly = isAlly(player.identity, stealTarget.identity);
+          // 保护盟友
           if (targetIsAlly && !sourceIsAlly) {
+            console.log(`  ${player.character.name} 考虑保护盟友 ${stealTarget.character.name} 免受${spellCard.name}`);
             return Math.random() < 0.7; // 70%概率保护盟友
+          }
+          // 如果是敌人被针对，不干预（甚至乐见其成）
+          if (!targetIsAlly && !sourceIsAlly) {
+            console.log(`  ${player.character.name} 看到敌人互斗，不干预`);
+            return false;
           }
         }
         return false;
@@ -1844,15 +2222,21 @@ export class GameEngine {
             enemyCount++;
           }
         }
+        console.log(`  ${player.character.name} 分析AOE：盟友${allyCount}人，敌人${enemyCount}人会受伤`);
         // 如果对盟友伤害大于对敌人伤害，使用无懈可击
         if (allyCount > enemyCount) {
           return Math.random() < 0.6;
+        }
+        // 如果对自己也有伤害，考虑使用
+        if (allyCount > 0 && player.character.hp <= 2) {
+          return Math.random() < 0.4; // 体力低时更可能使用
         }
         return false;
 
       case SpellCardName.DRAW_TWO:
         // 无中生有：敌人获得牌，对自己不利
         if (!sourceIsAlly) {
+          console.log(`  ${player.character.name} 考虑阻止敌人使用无中生有`);
           return Math.random() < 0.5; // 50%概率阻止敌人
         }
         return false;
@@ -1861,21 +2245,28 @@ export class GameEngine {
         // 桃园结义：回复体力
         // 计算会对多少敌人回复体力
         let enemyBenefit = 0;
+        let allyBenefit = 0;
         for (const p of this.state.players) {
           if (p.isDead) continue;
-          if (!isAlly(player.identity, p.identity) && p.character.hp < p.character.maxHp) {
-            enemyBenefit++;
+          if (p.character.hp < p.character.maxHp) {
+            if (isAlly(player.identity, p.identity)) {
+              allyBenefit++;
+            } else {
+              enemyBenefit++;
+            }
           }
         }
-        // 如果敌人受益多，使用无懈可击
-        if (enemyBenefit >= 2) {
-          return Math.random() < 0.5;
+        console.log(`  ${player.character.name} 分析桃园结义：盟友回复${allyBenefit}人，敌人回复${enemyBenefit}人`);
+        // 如果敌人受益明显多于盟友，使用无懈可击
+        if (enemyBenefit > allyBenefit) {
+          return Math.random() < 0.6;
         }
         return false;
 
       default:
         // 其他锦囊牌，根据盟友关系简单判断
         if (!sourceIsAlly) {
+          console.log(`  ${player.character.name} 考虑阻止敌人的${spellCard.name}`);
           return Math.random() < 0.3; // 30%概率阻止敌人
         }
         return false;
@@ -1953,7 +2344,64 @@ export class GameEngine {
 
       return true;
     } else {
-      // 玩家选择不响应，执行锦囊牌效果
+      // 玩家选择不响应，检查是否还有其他AI玩家可以打出无懈可击
+      const pendingResponse = this.state.pendingResponse;
+      if (!pendingResponse) return false;
+
+      const sourcePlayerId = pendingResponse.request.sourcePlayerId;
+      const sourcePlayer = this.state.players.find(p => p.id === sourcePlayerId);
+      const spellCardName = pendingResponse.request.cardName;
+
+      // 查找锦囊牌对象
+      const spellCard = this.state.discardPile.find(c => c.name === spellCardName) ||
+        sourcePlayer?.handCards.find(c => c.name === spellCardName);
+
+      if (!sourcePlayer) {
+        console.log(`无法找到锦囊牌使用者，直接执行效果`);
+        return this.resolveSpellCardEffect();
+      }
+
+      // 检查是否还有其他AI玩家有无懈可击
+      const otherPlayers = this.state.players.filter(p =>
+        p.id !== sourcePlayer.id && !p.isDead && p.isAI && p.id !== playerId
+      );
+      const playersWithNullification = otherPlayers.filter(player =>
+        player.handCards.some(c => c.name === SpellCardName.NULLIFICATION)
+      );
+
+      if (playersWithNullification.length > 0) {
+        console.log(`人类玩家选择不响应，等待AI玩家决定是否使用无懈可击...`);
+        // 延迟后让AI决定是否使用无懈可击
+        setTimeout(() => {
+          const currentPending = this.state.pendingResponse;
+          if (!currentPending || currentPending.resolved) return;
+          if (currentPending.request.responseType !== ResponseType.NULLIFY) return;
+
+          for (const aiPlayer of playersWithNullification) {
+            const nullificationCard = aiPlayer.handCards.find(
+              c => c.name === SpellCardName.NULLIFICATION
+            );
+            if (!nullificationCard) continue;
+
+            const shouldUse = this.shouldUseNullification(aiPlayer, sourcePlayer,
+              spellCard || { name: spellCardName, type: CardType.SPELL, suit: '' as CardSuit, number: 0, id: '', description: '', color: CardColor.BLACK } as Card);
+
+            if (shouldUse) {
+              console.log(`AI ${aiPlayer.character.name} 打出【无懈可击】抵消【${spellCardName}】`);
+              this.respondToNullification(aiPlayer.id, nullificationCard.id);
+              return;
+            }
+          }
+
+          // 没有AI打出无懈可击，执行锦囊牌效果
+          console.log(`没有AI使用无懈可击，【${spellCardName}】生效`);
+          this.resolveSpellCardEffect();
+        }, 1000);
+        return true;
+      }
+
+      // 没有其他AI玩家有无懈可击，直接执行锦囊牌效果
+      console.log(`没有其他玩家有无懈可击，【${spellCardName}】生效`);
       return this.resolveSpellCardEffect();
     }
   }

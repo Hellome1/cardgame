@@ -166,6 +166,7 @@ export enum ResponseType {
   ATTACK = 'attack',         // 需要出杀响应（如南蛮入侵）
   NULLIFY = 'nullify',       // 可以被无懈可击响应（锦囊牌）
   DUEL = 'duel',             // 决斗响应（双方轮流出杀）
+  FIRE_ATTACK = 'fire_attack', // 火攻响应（弃置同花色牌）
 }
 
 // 响应请求（用于杀、决斗等需要响应的牌）
@@ -178,6 +179,7 @@ export interface ResponseRequest {
   timeout?: number;            // 响应超时时间（毫秒）
   responseType?: ResponseType; // 响应类型
   spellCardEffect?: () => void; // 锦囊牌效果（用于无懈可击抵消后执行）
+  damageType?: 'normal' | 'fire' | 'thunder'; // 伤害类型
 }
 
 // 多目标响应队列项（用于南蛮入侵、万箭齐发等）
@@ -196,6 +198,13 @@ export interface DuelState {
   round: number;               // 决斗轮数
 }
 
+// 火攻状态
+export interface FireAttackState {
+  sourceId: string;            // 火攻使用者ID
+  targetId: string;            // 火攻目标ID
+  shownCard: Card;             // 目标展示的手牌
+}
+
 // 待处理的响应
 export interface PendingResponse {
   request: ResponseRequest;
@@ -208,6 +217,8 @@ export interface PendingResponse {
   sourcePlayerId?: string;      // 锦囊牌来源玩家ID（用于伤害计算）
   // 决斗相关字段
   duelState?: DuelState;        // 决斗状态
+  // 火攻相关字段
+  fireAttackState?: FireAttackState;  // 火攻状态
 }
 
 // 游戏状态
@@ -240,4 +251,5 @@ export interface ActionRequest {
   targetIds?: string[];
   isResponse?: boolean; // 标记是否是响应动作（如打出闪），不触发动画
   logMessage?: string; // 用于游戏记录的日志消息
+  isEffectResult?: boolean; // 标记是否是锦囊牌效果执行后的结果通知，避免重复记录日志
 }

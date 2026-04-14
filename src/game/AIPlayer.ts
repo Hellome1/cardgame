@@ -1,6 +1,7 @@
 import { Player, Card, CardType, BasicCardName, SpellCardName, GamePhase, GameAction, Identity } from '../types/game';
 import { GameEngine } from './GameEngine';
 import { DistanceCalculator } from './DistanceCalculator';
+import { GAME_CONFIG } from './GameConfig';
 
 // 怀疑度系统 - AI对其他玩家的怀疑程度
 interface SuspicionLevel {
@@ -36,7 +37,7 @@ export class AIPlayer {
       suspicionList.push(suspicion);
     }
 
-    suspicion.level = Math.min(100, suspicion.level + amount);
+    suspicion.level = Math.min(GAME_CONFIG.SUSPICION.MAX_LEVEL, suspicion.level + amount);
     suspicion.lastUpdate = currentRound;
 
     console.log(`[怀疑度] ${aiPlayerId} 对 ${targetPlayerId} 的怀疑度增加 ${amount}，当前: ${suspicion.level}`);
@@ -59,11 +60,11 @@ export class AIPlayer {
       case Identity.LORD:
         // 主公：除了忠臣外，其他都是敌人（但忠臣身份不明，需要通过怀疑度判断）
         // 如果怀疑度很高，认为是敌人
-        if (this.getSuspicionLevel(aiPlayer.id, targetPlayer.id) >= 50) {
+        if (this.getSuspicionLevel(aiPlayer.id, targetPlayer.id) >= GAME_CONFIG.SUSPICION.LORD_ENEMY_THRESHOLD) {
           return true;
         }
         // 怀疑度中等时，保守起见，认为可能是敌人
-        if (this.getSuspicionLevel(aiPlayer.id, targetPlayer.id) >= 20) {
+        if (this.getSuspicionLevel(aiPlayer.id, targetPlayer.id) >= GAME_CONFIG.SUSPICION.LORD_SUSPECT_THRESHOLD) {
           return true;
         }
         // 游戏初期（怀疑度为0），主公默认攻击非主公玩家（因为场上只有一个忠臣，其他都是敌人）
@@ -86,14 +87,11 @@ export class AIPlayer {
         if (isTargetLord) {
           return true; // 主公是首要目标
         }
-        // 对于非主公玩家，根据怀疑度判断
-        if (this.getSuspicionLevel(aiPlayer.id, targetPlayer.id) >= 30) {
+        // 对于非主公玩家，根据怀疑度判断（可能是忠臣或内奸）
+        if (this.getSuspicionLevel(aiPlayer.id, targetPlayer.id) >= GAME_CONFIG.SUSPICION.REBEL_SUSPECT_THRESHOLD) {
           return true;
         }
-        // 游戏初期（怀疑度为0），默认攻击非主公玩家
-        if (this.getSuspicionLevel(aiPlayer.id, targetPlayer.id) === 0 && !isTargetLord) {
-          return true;
-        }
+        // 反贼只攻击主公，不主动攻击其他玩家（除非有怀疑度）
         return false;
 
       case Identity.TRAITOR:
@@ -164,13 +162,13 @@ export class AIPlayer {
     this.logAllIdentities(gameState.players);
 
     // 等待一段时间模拟思考（增加延迟）
-    await this.delay(1500);
+    await this.delay(GAME_CONFIG.AI.THINK_DELAY);
 
     // 出牌阶段
     await this.playCards(player);
 
     // 等待一下（增加延迟）
-    await this.delay(800);
+    await this.delay(GAME_CONFIG.AI.ACTION_DELAY);
 
     // 注意：结束出牌阶段由 GameEngine 处理
     console.log(`AI ${player.character.name} 回合执行完毕`);
@@ -178,11 +176,11 @@ export class AIPlayer {
 
   // AI 出牌逻辑
   private async playCards(player: Player): Promise<void> {
-    const maxAttackPerTurn = 1; // 每回合只能使用1张杀（有诸葛连弩除外）
+    const maxAttackPerTurn = GAME_CONFIG.ATTACK.MAX_PER_TURN; // 每回合只能使用1张杀（有诸葛连弩除外）
 
     // 持续出牌直到没有可出的牌
     let playedCount = 0;
-    const maxCardsPerTurn = 10; // 防止无限循环
+    const maxCardsPerTurn = GAME_CONFIG.MAX_CARDS_PER_TURN; // 防止无限循环
 
     console.log(`AI ${player.character.name} 开始出牌，当前手牌: ${player.handCards.length}`);
 
@@ -332,7 +330,7 @@ export class AIPlayer {
           cardToPlay.name === BasicCardName.FIRE_ATTACK_CARD) {
           this.attackCountThisTurn++;
         }
-        await this.delay(1200); // 出牌间隔（增加延迟）
+        await this.delay(GAME_CONFIG.AI.ACTION_DELAY); // 出牌间隔（增加延迟）
       } else {
         // 出牌失败，避免死循环
         break;
@@ -352,8 +350,12 @@ export class AIPlayer {
 
     // 优先弃置基本牌，保留锦囊和装备
     const sortedCards = [...player.handCards].sort((a, b) => {
-      const priority = { [CardType.BASIC]: 0, [CardType.SPELL]: 1, [CardType.EQUIPMENT]: 2 };
-      return priority[a.type] - priority[b.type];
+      const priorityMap: Record<CardType, number> = {
+        [CardType.BASIC]: GAME_CONFIG.CARD_PRIORITY.BASIC,
+        [CardType.SPELL]: GAME_CONFIG.CARD_PRIORITY.SPELL,
+        [CardType.EQUIPMENT]: GAME_CONFIG.CARD_PRIORITY.EQUIPMENT,
+      };
+      return priorityMap[a.type] - priorityMap[b.type];
     });
 
     const cardsToRemove = sortedCards.slice(0, cardsToDiscard);
@@ -364,7 +366,7 @@ export class AIPlayer {
         playerId: player.id,
         cardId: card.id,
       });
-      await this.delay(300);
+      await this.delay(GAME_CONFIG.AI.DISCARD_DELAY);
     }
   }
 
