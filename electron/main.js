@@ -17,8 +17,12 @@ function createWindow() {
   });
 
   // 加载应用
-  const isDev = process.env.NODE_ENV === 'development';
+  // 检查是否处于开发模式（通过环境变量或命令行参数）
+  const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev');
+  
   if (isDev) {
+    // 开发模式下禁用缓存，确保显示最新代码
+    mainWindow.webContents.session.clearCache();
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {

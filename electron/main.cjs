@@ -249,10 +249,14 @@ const saveDiscardPileStateToFile = (data) => {
 // 检查 Vite 开发服务器是否可用
 const checkDevServer = () => {
   return new Promise((resolve) => {
+    // Vite 服务器任何响应（包括 404）都表示服务器在运行
     const request = http.get('http://localhost:5173', (res) => {
-      resolve(res.statusCode === 200);
+      console.log('Vite server status:', res.statusCode);
+      // 只要服务器有响应（无论 200 还是 404），都表示服务器在运行
+      resolve(true);
     });
-    request.on('error', () => {
+    request.on('error', (err) => {
+      console.log('Vite server not available:', err.message);
       resolve(false);
     });
     request.setTimeout(1000, () => {
@@ -277,10 +281,16 @@ async function createWindow() {
 
   // 检查是否是开发模式
   // 优先级：1. NODE_ENV 环境变量 2. Vite 服务器是否运行
-  const isDevMode = process.env.NODE_ENV === 'development' || await checkDevServer();
+  // 注意：Windows set 命令可能会添加尾部空格，需要 trim()
+  const nodeEnv = process.env.NODE_ENV?.trim();
+  console.log('NODE_ENV:', JSON.stringify(nodeEnv), 'checkDevServer:',await checkDevServer());
+  const isDevMode = nodeEnv === 'development' || await checkDevServer();
+  console.log('isDevMode:', isDevMode);
   
   if (isDevMode) {
     console.log('开发模式：连接到 Vite 开发服务器');
+    // 开发模式下禁用缓存，确保显示最新代码
+    mainWindow.webContents.session.clearCache();
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
