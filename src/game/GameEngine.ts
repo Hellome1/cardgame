@@ -2086,17 +2086,8 @@ export class GameEngine {
 
   // AI无懈可击响应处理
   private processAINullificationResponse(sourcePlayer: Player, spellCard: Card): void {
-    // 检查是否有人类玩家（非AI）可以响应无懈可击
-    const humanPlayer = this.state.players.find(p => !p.isAI && !p.isDead);
-    const hasHumanNullification = humanPlayer && humanPlayer.handCards.some(c => c.name === SpellCardName.NULLIFICATION);
-
-    // 如果有人类玩家且有无懈可击，先等待人类玩家响应（通过UI）
-    if (hasHumanNullification) {
-      console.log(`等待人类玩家 ${humanPlayer.character.name} 决定是否使用无懈可击...`);
-      // 不自动执行，等待人类玩家通过UI响应
-      // 游戏进程在这里阻塞，直到人类玩家做出选择
-      return;
-    }
+    // 如果锦囊牌是人类玩家打出的，不提示人类玩家使用无懈可击（自己不能无懈自己的锦囊）
+    // 直接让AI玩家决定是否使用无懈可击
 
     // 检查所有AI玩家是否有无懈可击（排除锦囊牌使用者自己）
     const otherPlayers = this.state.players.filter(p =>
@@ -2120,7 +2111,7 @@ export class GameEngine {
     const targetPlayerId = pendingResponse?.request.targetPlayerId;
     const targetPlayer = targetPlayerId ? this.state.players.find(p => p.id === targetPlayerId) : undefined;
 
-    // 有AI玩家有无懈可击，延迟一下让他们有机会打出
+    // 有AI玩家有无懈可击，延迟一下让他们有机会打出（缩短延迟时间）
     setTimeout(() => {
       const currentPending = this.state.pendingResponse;
       if (!currentPending || currentPending.resolved) return;
@@ -2128,8 +2119,11 @@ export class GameEngine {
       // 检查是否是无懈可击响应类型
       if (currentPending.request.responseType !== ResponseType.NULLIFY) return;
 
-      // 根据盟友关系决定是否使用无懈可击
-      for (const player of playersWithNullification) {
+      // 优先让血量低的AI玩家使用无懈可击保护自己
+      // 按血量排序（血量低的优先）
+      const sortedPlayers = [...playersWithNullification].sort((a, b) => a.character.hp - b.character.hp);
+
+      for (const player of sortedPlayers) {
         const nullificationCard = player.handCards.find(
           c => c.name === SpellCardName.NULLIFICATION
         );
@@ -2148,7 +2142,7 @@ export class GameEngine {
       // 没有AI打出无懈可击，执行锦囊牌效果
       console.log(`没有AI使用无懈可击，【${spellCard.name}】生效`);
       this.resolveSpellCardEffect();
-    }, 1500);
+    }, 800); // 缩短延迟时间从1500ms到800ms
   }
 
   // 判断是否应使用无懈可击

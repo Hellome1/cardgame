@@ -45,9 +45,10 @@ export const HandCards: React.FC<HandCardsProps> = ({
   isCardPlayable,
   onCardClick,
 }) => {
-  const containerWidth = 800; // 手牌区域宽度
+  const containerWidth = 1000; // 手牌区域宽度（增加宽度以容纳更多牌）
   const cardWidth = 120; // 单张牌宽度
   const defaultGap = 5; // 默认正数间隙
+  const minGap = -80; // 最小间隙（负数表示堆叠，最多重叠80px）
 
   // 计算每张牌的偏移量 - 每次手牌变化都会重新计算
   const cardPositions = useMemo(() => {
@@ -74,7 +75,12 @@ export const HandCards: React.FC<HandCardsProps> = ({
     // 让所有牌刚好能放入容器
     // containerWidth = totalCards * cardWidth + (totalCards - 1) * gap
     // gap = (containerWidth - totalCards * cardWidth) / (totalCards - 1)
-    const dynamicGap = (containerWidth - totalCards * cardWidth) / (totalCards - 1);
+    let dynamicGap = (containerWidth - totalCards * cardWidth) / (totalCards - 1);
+    
+    // 限制最小间隙，避免过度堆叠导致卡牌完全看不见
+    if (dynamicGap < minGap) {
+      dynamicGap = minGap;
+    }
 
     return cards.map((_, index) => ({
       offset: index * (cardWidth + dynamicGap),
@@ -95,7 +101,7 @@ export const HandCards: React.FC<HandCardsProps> = ({
   const isResponseTarget = pendingResponse && currentTurnId === humanPlayer.id;
 
   return (
-    <div className="hand-cards-container" style={{ width: containerWidth }}>
+    <div className="hand-cards-container" style={{ width: '100%', maxWidth: containerWidth }}>
       {cards.map((card, index) => {
         const position = cardPositions[index];
         if (!position) return null;

@@ -1,4 +1,5 @@
-import { Character, Kingdom, Gender, SkillTrigger } from '../types/game';
+import { Character, Kingdom, Gender, SkillTrigger, SkillContext } from '../types/game';
+import { SkillManager } from './SkillManager';
 
 export class CharacterManager {
   private static instance: CharacterManager;
@@ -28,7 +29,9 @@ export class CharacterManager {
           description: '当你受到伤害后，你可以获得对你造成伤害的牌，并摸一张牌。',
           trigger: SkillTrigger.ON_DAMAGE,
           isPassive: false,
-          execute: () => {},
+          execute: (context: SkillContext) => {
+            SkillManager.jianxiong(context);
+          },
         },
       ],
       avatar: '/avatars/caocao.png',
@@ -48,7 +51,9 @@ export class CharacterManager {
           description: '当你受到伤害后，你可以获得伤害来源的一张牌。',
           trigger: SkillTrigger.ON_DAMAGE,
           isPassive: false,
-          execute: () => {},
+          execute: (context: SkillContext) => {
+            SkillManager.fankui(context);
+          },
         },
         {
           id: 'guicai',
@@ -56,7 +61,10 @@ export class CharacterManager {
           description: '当一名角色的判定牌生效前，你可以打出一张手牌代替之。',
           trigger: SkillTrigger.BEFORE_PLAY,
           isPassive: false,
-          execute: () => {},
+          execute: () => {
+            // TODO: 实现判定牌替换逻辑
+            console.log('【鬼才】技能待实现');
+          },
         },
       ],
       avatar: '/avatars/simayi.png',
@@ -157,7 +165,9 @@ export class CharacterManager {
           description: '锁定技，你于出牌阶段内使用【杀】无次数限制。',
           trigger: SkillTrigger.PLAY,
           isPassive: true,
-          execute: () => {},
+          execute: (context: SkillContext) => {
+            SkillManager.paoxiao(context);
+          },
         },
       ],
       avatar: '/avatars/zhangfei.png',
@@ -227,7 +237,9 @@ export class CharacterManager {
           description: '摸牌阶段，你可以多摸一张牌。',
           trigger: SkillTrigger.ON_DRAW,
           isPassive: true,
-          execute: () => {},
+          execute: (context: SkillContext) => {
+            SkillManager.yingzi(context);
+          },
         },
         {
           id: 'fanjian',
@@ -236,7 +248,10 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           useLimit: 1,
-          execute: () => {},
+          execute: () => {
+            // TODO: 实现反间逻辑
+            console.log('【反间】技能待实现');
+          },
         },
       ],
       avatar: '/avatars/zhouyu.png',
@@ -276,7 +291,9 @@ export class CharacterManager {
           description: '出牌阶段，你可以失去1点体力，然后摸两张牌。',
           trigger: SkillTrigger.PLAY,
           isPassive: false,
-          execute: () => {},
+          execute: (context: SkillContext) => {
+            SkillManager.kurou(context);
+          },
         },
       ],
       avatar: '/avatars/huanggai.png',
@@ -297,7 +314,9 @@ export class CharacterManager {
           description: '锁定技，当你使用【杀】指定一个目标后，该角色需依次使用两张【闪】才能抵消；当你使用【决斗】指定一个目标后，或成为一名角色使用【决斗】的目标后，该角色需依次打出两张【杀】才能响应。',
           trigger: SkillTrigger.PLAY,
           isPassive: true,
-          execute: () => {},
+          execute: (context: SkillContext) => {
+            SkillManager.wushuang(context);
+          },
         },
       ],
       avatar: '/avatars/lvbu.png',
@@ -317,7 +336,9 @@ export class CharacterManager {
           description: '你的回合外，你可以将一张红色牌当【桃】使用。',
           trigger: SkillTrigger.ON_HEAL,
           isPassive: false,
-          execute: () => {},
+          execute: (context: SkillContext) => {
+            SkillManager.jijiu(context);
+          },
         },
         {
           id: 'qingnang',
@@ -326,7 +347,10 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           useLimit: 1,
-          execute: () => {},
+          execute: () => {
+            // TODO: 实现青囊逻辑
+            console.log('【青囊】技能待实现');
+          },
         },
       ],
       avatar: '/avatars/huatuo.png',
@@ -347,7 +371,10 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           useLimit: 1,
-          execute: () => {},
+          execute: () => {
+            // TODO: 实现离间逻辑
+            console.log('【离间】技能待实现');
+          },
         },
         {
           id: 'biyue',
@@ -355,7 +382,9 @@ export class CharacterManager {
           description: '结束阶段，你可以摸一张牌。',
           trigger: SkillTrigger.TURN_END,
           isPassive: false,
-          execute: () => {},
+          execute: (context) => {
+            SkillManager.biyue(context);
+          },
         },
       ],
       avatar: '/avatars/diaochan.png',

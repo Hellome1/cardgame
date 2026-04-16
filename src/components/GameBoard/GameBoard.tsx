@@ -14,7 +14,7 @@ let hasAutoClearedLogs = false;
 // 卡牌使用动画信息
 interface CardAnimation {
   sourcePlayerId: string;
-  targetPlayerId: string;
+  targetPlayerIds: string[];  // 支持多目标
   cardName: string;
   timestamp: number;
 }
@@ -124,7 +124,7 @@ export const GameBoard: React.FC = () => {
 
   // 卡牌使用动画状态
   const [cardAnimation, setCardAnimation] = useState<CardAnimation | null>(null);
-  const [linePosition, setLinePosition] = useState<{ start: { x: number, y: number }, end: { x: number, y: number } } | null>(null);
+  const [linePositions, setLinePositions] = useState<{ start: { x: number, y: number }, end: { x: number, y: number } }[]>([]);
 
   // 出牌显示区域状态 - 支持多张牌排列
   const [playedCards, setPlayedCards] = useState<PlayedCardInfo[]>([]);
@@ -270,17 +270,19 @@ export const GameBoard: React.FC = () => {
       // 注意：GameAction.PLAY_CARD 的值是 'play_card'
       // 排除响应动作（如打出闪），不触发动画
       if (action.action === 'play_card' && action.targetIds && action.targetIds.length > 0 && action.cardName && !action.isResponse) {
-        // 触发动画
+        // 触发动画 - 支持多目标（如南蛮入侵、万箭齐发）
         setCardAnimation({
           sourcePlayerId: action.playerId,
-          targetPlayerId: action.targetIds[0],
+          targetPlayerIds: action.targetIds,  // 传递所有目标
           cardName: action.cardName,
           timestamp: Date.now(),
         });
       }
 
-      // 显示出牌信息（包括有目标和无目标的牌）
-      if (action.action === 'play_card' && action.cardName && !action.isResponse) {
+      // 显示出牌信息（包括有目标和无目标的牌，以及决斗响应）
+      // 决斗时打出的杀也需要显示
+      const isDuelResponse = action.isResponse && action.logMessage?.includes('决斗');
+      if (action.action === 'play_card' && action.cardName && (!action.isResponse || isDuelResponse)) {
         const gameState = useGameStore.getState().gameState;
         if (gameState) {
           const player = gameState.players.find(p => p.id === action.playerId);
@@ -289,8 +291,15 @@ export const GameBoard: React.FC = () => {
             : undefined;
 
           // 查找卡牌信息
-          const playedCard = player?.handCards.find(c => c.id === action.cardId) ||
-            gameState.discardPile[gameState.discardPile.length - 1];
+          // 对于决斗响应，卡牌已经在弃牌堆中（因为引擎先移除卡牌再触发监听器）
+          let playedCard = player?.handCards.find(c => c.id === action.cardId);
+          if (!playedCard && action.cardId) {
+            // 从弃牌堆中查找（按时间倒序，找最近的一张）
+            playedCard = gameState.discardPile
+              .slice()
+              .reverse()
+              .find(c => c.id === action.cardId);
+          }
 
           if (player && playedCard) {
             const newCard: PlayedCardInfo = {
@@ -327,26 +336,33 @@ export const GameBoard: React.FC = () => {
 
     const tryCalculatePosition = () => {
       const sourceEl = playerRefs.current.get(cardAnimation.sourcePlayerId);
-      const targetEl = playerRefs.current.get(cardAnimation.targetPlayerId);
+      const boardEl = document.querySelector('.game-board') as HTMLElement;
 
-      if (sourceEl && targetEl) {
+      if (sourceEl && boardEl) {
         const sourceRect = sourceEl.getBoundingClientRect();
-        const targetRect = targetEl.getBoundingClientRect();
-        const boardEl = document.querySelector('.game-board') as HTMLElement;
+        const boardRect = boardEl.getBoundingClientRect();
+        const sourceX = sourceRect.left + sourceRect.width / 2 - boardRect.left;
+        const sourceY = sourceRect.top + sourceRect.height / 2 - boardRect.top;
 
-        if (boardEl) {
-          const boardRect = boardEl.getBoundingClientRect();
+        // 计算所有目标的连线位置
+        const positions: { start: { x: number, y: number }, end: { x: number, y: number } }[] = [];
+        
+        for (const targetId of cardAnimation.targetPlayerIds) {
+          const targetEl = playerRefs.current.get(targetId);
+          if (targetEl) {
+            const targetRect = targetEl.getBoundingClientRect();
+            positions.push({
+              start: { x: sourceX, y: sourceY },
+              end: {
+                x: targetRect.left + targetRect.width / 2 - boardRect.left,
+                y: targetRect.top + targetRect.height / 2 - boardRect.top,
+              },
+            });
+          }
+        }
 
-          setLinePosition({
-            start: {
-              x: sourceRect.left + sourceRect.width / 2 - boardRect.left,
-              y: sourceRect.top + sourceRect.height / 2 - boardRect.top,
-            },
-            end: {
-              x: targetRect.left + targetRect.width / 2 - boardRect.left,
-              y: targetRect.top + targetRect.height / 2 - boardRect.top,
-            },
-          });
+        if (positions.length > 0) {
+          setLinePositions(positions);
           return;
         }
       }
@@ -364,7 +380,7 @@ export const GameBoard: React.FC = () => {
     // 2秒后清除动画
     const clearTimer = setTimeout(() => {
       setCardAnimation(null);
-      setLinePosition(null);
+      setLinePositions([]);
     }, 2500);
 
     return () => clearTimeout(clearTimer);
@@ -1026,12 +1042,12 @@ export const GameBoard: React.FC = () => {
                 </div>
               )}
 
-              {/* 响应阶段提示（被杀或锦囊牌时） */}
-              {gameState.phase === GamePhase.RESPONSE && gameState.pendingResponse && (
+              {/* 响应阶段提示（被杀或锦囊牌时） - 死亡玩家不显示 */}
+              {gameState.phase === GamePhase.RESPONSE && gameState.pendingResponse && !humanPlayer.isDead && (
                 <div className="response-panel">
                   {gameState.pendingResponse.request.responseType === ResponseType.NULLIFY ? (
-                    // 无懈可击响应阶段 - 只有非锦囊牌使用者才显示响应界面
-                    gameState.pendingResponse.request.sourcePlayerId !== humanPlayer.id ? (
+                    // 无懈可击响应阶段 - 只有非锦囊牌使用者且未死亡的玩家才显示响应界面
+                    gameState.pendingResponse.request.sourcePlayerId !== humanPlayer.id && !humanPlayer.isDead ? (
                       <>
                         <div className="response-info">
                           <span className="response-attacker">
@@ -1064,7 +1080,7 @@ export const GameBoard: React.FC = () => {
                         </div>
                       </>
                     ) : (
-                      // 锦囊牌使用者等待其他玩家响应
+                      // 锦囊牌使用者或已死亡玩家等待其他玩家响应
                       <>
                         <div className="response-info">
                           等待其他玩家响应...
@@ -1300,7 +1316,7 @@ export const GameBoard: React.FC = () => {
         )}
 
         {/* 卡牌使用动画 */}
-        {cardAnimation && linePosition && (
+        {cardAnimation && linePositions.length > 0 && (
           <div className="card-animation-container">
             <svg className="card-animation-svg" style={{ width: '100%', height: '100%' }}>
               <defs>
@@ -1310,7 +1326,7 @@ export const GameBoard: React.FC = () => {
                   <stop offset="100%" stopColor="#ffd700" />
                 </linearGradient>
                 <filter id="glow">
-                  <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+                  <feGaussianBlur stdDeviation="2" result="coloredBlur" />
                   <feMerge>
                     <feMergeNode in="coloredBlur" />
                     <feMergeNode in="SourceGraphic" />
@@ -1318,78 +1334,78 @@ export const GameBoard: React.FC = () => {
                 </filter>
               </defs>
 
-              {/* 发光线条 - 统一使用长距离样式，都有箭头，线条更细 */}
-              {(() => {
-                return (
-                  <>
-                    {/* 发光背景线 - 更细 */}
-                    <line
-                      x1={linePosition.start.x}
-                      y1={linePosition.start.y}
-                      x2={linePosition.end.x}
-                      y2={linePosition.end.y}
-                      stroke="#ff6b6b"
-                      strokeWidth="6"
-                      strokeLinecap="round"
-                      opacity="0.3"
-                      className="card-animation-line-glow-bg"
-                    />
-                    <line
-                      x1={linePosition.start.x}
-                      y1={linePosition.start.y}
-                      x2={linePosition.end.x}
-                      y2={linePosition.end.y}
-                      stroke="url(#lineGradient)"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      filter="url(#glow)"
-                      className="card-animation-line"
-                    />
-                  </>
-                );
-              })()}
-
-              {/* 箭头 - 计算角度指向目标，统一使用长距离样式 */}
-              {(() => {
-                const dx = linePosition.end.x - linePosition.start.x;
-                const dy = linePosition.end.y - linePosition.start.y;
-                const angle = Math.atan2(dy, dx);
-                const arrowLength = 15;
-                const arrowWidth = 8;
-
-                // 箭头尖端在终点，向后延伸
-                const tipX = linePosition.end.x;
-                const tipY = linePosition.end.y;
-                const baseX = tipX - arrowLength * Math.cos(angle);
-                const baseY = tipY - arrowLength * Math.sin(angle);
-                const leftX = baseX + arrowWidth * Math.sin(angle);
-                const leftY = baseY - arrowWidth * Math.cos(angle);
-                const rightX = baseX - arrowWidth * Math.sin(angle);
-                const rightY = baseY + arrowWidth * Math.cos(angle);
-
-                return (
-                  <polygon
-                    points={`${tipX},${tipY} ${leftX},${leftY} ${rightX},${rightY}`}
-                    fill="#ffd700"
-                    filter="url(#glow)"
-                    className="card-animation-arrow"
+              {/* 多条发光线条 - 支持多目标（如南蛮入侵、万箭齐发） */}
+              {linePositions.map((pos, index) => (
+                <g key={index}>
+                  {/* 发光背景线 - 更细 */}
+                  <line
+                    x1={pos.start.x}
+                    y1={pos.start.y}
+                    x2={pos.end.x}
+                    y2={pos.end.y}
+                    stroke="#ff6b6b"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    opacity="0.3"
+                    className="card-animation-line-glow-bg"
                   />
-                );
-              })()}
+                  <line
+                    x1={pos.start.x}
+                    y1={pos.start.y}
+                    x2={pos.end.x}
+                    y2={pos.end.y}
+                    stroke="url(#lineGradient)"
+                    strokeWidth={1.5}
+                    strokeLinecap="round"
+                    filter="url(#glow)"
+                    className="card-animation-line"
+                  />
+                  
+                  {/* 箭头 - 计算角度指向目标 */}
+                  {(() => {
+                    const dx = pos.end.x - pos.start.x;
+                    const dy = pos.end.y - pos.start.y;
+                    const angle = Math.atan2(dy, dx);
+                    const arrowLength = 12;
+                    const arrowWidth = 6;
+
+                    // 箭头尖端在终点，向后延伸
+                    const tipX = pos.end.x;
+                    const tipY = pos.end.y;
+                    const baseX = tipX - arrowLength * Math.cos(angle);
+                    const baseY = tipY - arrowLength * Math.sin(angle);
+                    const leftX = baseX + arrowWidth * Math.sin(angle);
+                    const leftY = baseY - arrowWidth * Math.cos(angle);
+                    const rightX = baseX - arrowWidth * Math.sin(angle);
+                    const rightY = baseY + arrowWidth * Math.cos(angle);
+
+                    return (
+                      <polygon
+                        points={`${tipX},${tipY} ${leftX},${leftY} ${rightX},${rightY}`}
+                        fill="#ffd700"
+                        filter="url(#glow)"
+                        className="card-animation-arrow"
+                      />
+                    );
+                  })()}
+                </g>
+              ))}
             </svg>
 
-            {/* 卡牌名称标签 - 使用HTML而不是SVG text */}
-            <div
-              className="card-animation-label"
-              style={{
-                position: 'absolute',
-                left: `${(linePosition.start.x + linePosition.end.x) / 2}px`,
-                top: `${(linePosition.start.y + linePosition.end.y) / 2 - 20}px`,
-                transform: 'translateX(-50%)',
-              }}
-            >
-              【{cardAnimation.cardName}】
-            </div>
+            {/* 卡牌名称标签 - 显示在第一条线的中间位置 */}
+            {linePositions.length > 0 && (
+              <div
+                className="card-animation-label"
+                style={{
+                  position: 'absolute',
+                  left: `${(linePositions[0].start.x + linePositions[0].end.x) / 2}px`,
+                  top: `${(linePositions[0].start.y + linePositions[0].end.y) / 2 - 20}px`,
+                  transform: 'translateX(-50%)',
+                }}
+              >
+                【{cardAnimation.cardName}】
+              </div>
+            )}
           </div>
         )}
       </div>
