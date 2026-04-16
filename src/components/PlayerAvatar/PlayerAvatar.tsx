@@ -1,5 +1,5 @@
-import React from 'react';
-import { Player, Identity } from '../../types/game';
+import React, { useState } from 'react';
+import { Player, Identity, SpellCardName } from '../../types/game';
 import './PlayerAvatar.css';
 
 interface PlayerAvatarProps {
@@ -27,6 +27,8 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
   onClick,
   setRef,
 }) => {
+  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
+
   const getIdentityText = (identity: Identity) => {
     switch (identity) {
       case Identity.LORD:
@@ -69,12 +71,74 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
     return hearts;
   };
 
+  // 获取判定区图标
+  const getDelayedSpellIcon = (spellName: string): string => {
+    switch (spellName) {
+      case SpellCardName.INDULGENCE:
+        return '🎭'; // 乐不思蜀
+      case SpellCardName.SUPPLY_SHORTAGE:
+        return '🍞'; // 兵粮寸断
+      case SpellCardName.LIGHTNING:
+        return '⚡'; // 闪电
+      default:
+        return '📜';
+    }
+  };
+
+  // 获取判定区描述
+  const getDelayedSpellDesc = (spellName: string): string => {
+    switch (spellName) {
+      case SpellCardName.INDULGENCE:
+        return '乐不思蜀：判定阶段，若结果不为红桃，跳过出牌阶段';
+      case SpellCardName.SUPPLY_SHORTAGE:
+        return '兵粮寸断：判定阶段，若结果不为梅花，跳过摸牌阶段';
+      case SpellCardName.LIGHTNING:
+        return '闪电：判定阶段，若结果为黑桃2-9，受到3点雷电伤害';
+      default:
+        return '';
+    }
+  };
+
+  // 处理技能点击
+  const handleSkillClick = (skillId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedSkill(selectedSkill === skillId ? null : skillId);
+  };
+
   return (
     <div
       ref={setRef}
       className={`player-avatar${isCurrentTurn ? ' current-turn' : ''}${isSelected ? ' selected' : ''}${player.isDead ? ' dead' : ''}${isHuman ? ' human' : ''}${isSelectable ? ' selectable' : ''}${isUnselectable ? ' unselectable' : ''}`}
       onClick={onClick}
     >
+      {/* 判定区 - 上方小图标 */}
+      <div className="delayed-spells-area">
+        {player.delayedSpells.indulgence && (
+          <div
+            className="delayed-spell-icon indulgence"
+            title={getDelayedSpellDesc(SpellCardName.INDULGENCE)}
+          >
+            {getDelayedSpellIcon(SpellCardName.INDULGENCE)}
+          </div>
+        )}
+        {player.delayedSpells.supplyShortage && (
+          <div
+            className="delayed-spell-icon supply-shortage"
+            title={getDelayedSpellDesc(SpellCardName.SUPPLY_SHORTAGE)}
+          >
+            {getDelayedSpellIcon(SpellCardName.SUPPLY_SHORTAGE)}
+          </div>
+        )}
+        {player.delayedSpells.lightning && (
+          <div
+            className="delayed-spell-icon lightning"
+            title={getDelayedSpellDesc(SpellCardName.LIGHTNING)}
+          >
+            {getDelayedSpellIcon(SpellCardName.LIGHTNING)}
+          </div>
+        )}
+      </div>
+
       {/* 左上角 - 武将名称（纵向排列） */}
       <div className="player-name-vertical">
         {player.character.name}
@@ -96,6 +160,26 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
           </div>
         )}
         <div className="player-hp-vertical">{renderHearts()}</div>
+      </div>
+
+      {/* 技能区 - 左下角 */}
+      <div className="player-skills">
+        {player.character.skills.map((skill) => (
+          <div
+            key={skill.id}
+            className={`skill-item ${skill.isPassive ? 'passive' : 'active'} ${selectedSkill === skill.id ? 'selected' : ''}`}
+            onClick={(e) => handleSkillClick(skill.id, e)}
+          >
+            <span className="skill-name">{skill.name}</span>
+            {/* 技能详细描述弹窗 */}
+            {selectedSkill === skill.id && (
+              <div className="skill-tooltip">
+                <div className="skill-tooltip-title">{skill.name}</div>
+                <div className="skill-tooltip-desc">{skill.description}</div>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* 装备区 - 三排：武器、防具、马匹 */}

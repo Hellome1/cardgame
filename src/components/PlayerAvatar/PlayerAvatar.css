@@ -11,7 +11,7 @@
   border-radius: 10px;
   color: white;
   text-align: center;
-  cursor: pointer;
+  cursor: default;
   transition: all 0.2s ease;
   position: relative;
   display: flex;
@@ -20,7 +20,7 @@
   justify-content: flex-start;
   flex-shrink: 0;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* 中央区域 - 头像和手牌（在整个武将牌中居中） */
@@ -106,6 +106,7 @@
   border-color: #00bcd4;
   box-shadow: 0 0 8px rgba(0, 188, 212, 0.4);
   animation: pulse 1.5s infinite;
+  cursor: pointer;
 }
 
 .player-avatar.unselectable {
@@ -125,6 +126,43 @@
   100% {
     box-shadow: 0 0 5px rgba(0, 188, 212, 0.4);
   }
+}
+
+/* 判定区 - 上方小图标 */
+.delayed-spells-area {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  z-index: 3;
+}
+
+.delayed-spell-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: help;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.delayed-spell-icon.indulgence {
+  background: linear-gradient(135deg, #e91e63 0%, #c2185b 100%);
+}
+
+.delayed-spell-icon.supply-shortage {
+  background: linear-gradient(135deg, #795548 0%, #5d4037 100%);
+}
+
+.delayed-spell-icon.lightning {
+  background: linear-gradient(135deg, #ffeb3b 0%, #fbc02d 100%);
 }
 
 /* 左上角 - 武将名称（纵向排列） */
@@ -211,15 +249,97 @@
   color: #666;
 }
 
+/* 技能区 - 左下角，在武将牌外部 */
+.player-skills {
+  position: absolute;
+  bottom: -28px;
+  left: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  z-index: 10;
+  max-width: 140px;
+}
+
+.skill-item {
+  font-size: 10px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.skill-item:hover {
+  transform: scale(1.05);
+}
+
+.skill-item.selected {
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+}
+
+.skill-item.passive {
+  background: rgba(156, 39, 176, 0.6);
+  border: 1px solid #9c27b0;
+  color: #e1bee7;
+}
+
+.skill-item.active {
+  background: rgba(255, 152, 0, 0.6);
+  border: 1px solid #ff9800;
+  color: #ffe0b2;
+}
+
+.skill-name {
+  font-weight: bold;
+}
+
+/* 技能详细描述弹窗 */
+.skill-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background: rgba(0, 0, 0, 0.95);
+  border: 1px solid #666;
+  border-radius: 6px;
+  padding: 8px 12px;
+  min-width: 200px;
+  max-width: 250px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  margin-bottom: 8px;
+  pointer-events: none;
+}
+
+.skill-tooltip-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #ffd700;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #666;
+  padding-bottom: 4px;
+}
+
+.skill-tooltip-desc {
+  font-size: 12px;
+  color: #fff;
+  line-height: 1.5;
+  white-space: normal;
+}
+
 /* 装备区 - 三排：武器、防具、马匹 */
 .player-equipment {
   position: absolute;
   bottom: 4px;
-  left: 16px;
+  left: 56px;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: 108px;
+  width: 80px;
   z-index: 2;
 }
 
@@ -269,10 +389,39 @@
   gap: 2px;
 }
 
+/* 马匹槽位 - 允许覆盖 */
 .horses-slot {
   display: flex;
   flex-direction: row;
-  gap: 2px;
+  position: relative;
+  height: 18px;
+}
+
+.horses-slot .equipment-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* +1马（防御马）在底层 */
+.horses-slot .horse-plus {
+  z-index: 1;
+}
+
+/* -1马（进攻马）在上层，覆盖+1马 */
+.horses-slot .horse-minus {
+  z-index: 2;
+  width: 70%;
+  right: 0;
+  left: auto;
+  border-radius: 3px 0 0 3px;
+}
+
+.horses-slot .equipment-placeholder {
+  position: static;
+  width: 100%;
 }
 
 .equipment-placeholder {

@@ -1,7 +1,7 @@
 import {
   GameState, Player, Identity, GamePhase,
   ActionRequest, GameAction, Card, CardType, CardSuit, CardColor, BasicCardName, SpellCardName, ResponseType,
-  DuelState
+  DuelState, SkillContext, SkillTrigger
 } from '../types/game';
 import { CardManager } from './CardManager';
 import { CharacterManager } from './CharacterManager';
@@ -164,6 +164,7 @@ export class GameEngine {
         identity: identities[index],
         handCards: cards,
         equipment: {},
+        delayedSpells: {},
         isDead: false,
         isAI,
       };
@@ -359,9 +360,153 @@ export class GameEngine {
 
   // 判定阶段
   private handleJudgment(): void {
-    // 处理延时锦囊判定（简化版暂不实现）
+    const player = this.getCurrentPlayer();
+    const delayedSpells = player.delayedSpells;
+
+    // 处理闪电
+    if (delayedSpells.lightning) {
+      console.log(`${player.character.name} 的判定阶段：【闪电】判定`);
+      this.judgeLightning(player);
+      // 闪电处理完后继续处理其他延时锦囊
+    }
+
+    // 处理兵粮寸断
+    if (delayedSpells.supplyShortage) {
+      console.log(`${player.character.name} 的判定阶段：【兵粮寸断】判定`);
+      const success = this.judgeSupplyShortage(player);
+      if (success) {
+        // 判定成功，跳过摸牌阶段
+        console.log(`${player.character.name} 跳过摸牌阶段`);
+        this.state.phase = GamePhase.PLAY;
+        this.processTurn();
+        return;
+      }
+    }
+
+    // 处理乐不思蜀
+    if (delayedSpells.indulgence) {
+      console.log(`${player.character.name} 的判定阶段：【乐不思蜀】判定`);
+      const success = this.judgeIndulgence(player);
+      if (success) {
+        // 判定成功，跳过出牌阶段
+        console.log(`${player.character.name} 跳过出牌阶段`);
+        // 直接进入弃牌阶段
+        this.handleDiscard();
+        return;
+      }
+    }
+
     this.state.phase = GamePhase.DRAW;
     this.processTurn();
+  }
+
+  // 判定乐不思蜀
+  private judgeIndulgence(player: Player): boolean {
+    const card = player.delayedSpells.indulgence;
+    if (!card) return false;
+
+    // 进行判定
+    const judgeResult = this.cardManager.draw(this.state.deck, 1);
+    if (judgeResult.cards.length === 0) {
+      console.log('牌堆已空，无法判定');
+      return false;
+    }
+
+    const judgeCard = judgeResult.cards[0];
+    this.state.deck = judgeResult.remaining;
+    console.log(`${player.character.name} 【乐不思蜀】判定: ${judgeCard.suit}${judgeCard.number} ${judgeCard.name}`);
+
+    // 判定结果不为红桃时生效
+    const isEffective = judgeCard.suit !== CardSuit.HEART;
+
+    // 将判定牌放入弃牌堆
+    this.state.discardPile.push(judgeCard);
+    // 将乐不思蜀放入弃牌堆
+    this.state.discardPile.push(card);
+    player.delayedSpells.indulgence = undefined;
+
+    if (isEffective) {
+      console.log(`【乐不思蜀】生效！${player.character.name} 跳过出牌阶段`);
+    } else {
+      console.log(`【乐不思蜀】未生效（红桃）`);
+    }
+
+    return isEffective;
+  }
+
+  // 判定兵粮寸断
+  private judgeSupplyShortage(player: Player): boolean {
+    const card = player.delayedSpells.supplyShortage;
+    if (!card) return false;
+
+    // 进行判定
+    const judgeResult = this.cardManager.draw(this.state.deck, 1);
+    if (judgeResult.cards.length === 0) {
+      console.log('牌堆已空，无法判定');
+      return false;
+    }
+
+    const judgeCard = judgeResult.cards[0];
+    this.state.deck = judgeResult.remaining;
+    console.log(`${player.character.name} 【兵粮寸断】判定: ${judgeCard.suit}${judgeCard.number} ${judgeCard.name}`);
+
+    // 判定结果不为梅花时生效
+    const isEffective = judgeCard.suit !== CardSuit.CLUB;
+
+    // 将判定牌放入弃牌堆
+    this.state.discardPile.push(judgeCard);
+    // 将兵粮寸断放入弃牌堆
+    this.state.discardPile.push(card);
+    player.delayedSpells.supplyShortage = undefined;
+
+    if (isEffective) {
+      console.log(`【兵粮寸断】生效！${player.character.name} 跳过摸牌阶段`);
+    } else {
+      console.log(`【兵粮寸断】未生效（梅花）`);
+    }
+
+    return isEffective;
+  }
+
+  // 判定闪电
+  private judgeLightning(player: Player): void {
+    const card = player.delayedSpells.lightning;
+    if (!card) return;
+
+    // 进行判定
+    const judgeResult = this.cardManager.draw(this.state.deck, 1);
+    if (judgeResult.cards.length === 0) {
+      console.log('牌堆已空，无法判定');
+      return;
+    }
+
+    const judgeCard = judgeResult.cards[0];
+    this.state.deck = judgeResult.remaining;
+    console.log(`${player.character.name} 【闪电】判定: ${judgeCard.suit}${judgeCard.number} ${judgeCard.name}`);
+
+    // 将判定牌放入弃牌堆
+    this.state.discardPile.push(judgeCard);
+
+    // 判定结果为黑桃2-9时生效
+    const isEffective = judgeCard.suit === CardSuit.SPADE &&
+      judgeCard.number >= 2 && judgeCard.number <= 9;
+
+    if (isEffective) {
+      console.log(`【闪电】生效！${player.character.name} 受到3点雷电伤害`);
+      // 将闪电放入弃牌堆
+      this.state.discardPile.push(card);
+      player.delayedSpells.lightning = undefined;
+      // 造成3点雷电伤害
+      this.dealDamage(player.id, player.id, 3);
+    } else {
+      console.log(`【闪电】未生效，移动到下家`);
+      // 将闪电移动到下家
+      player.delayedSpells.lightning = undefined;
+      const nextPlayerIndex = (this.state.currentPlayerIndex + 1) % this.state.players.length;
+      const nextPlayer = this.state.players[nextPlayerIndex];
+      nextPlayer.delayedSpells.lightning = card;
+      console.log(`【闪电】移动到 ${nextPlayer.character.name} 的判定区`);
+    }
   }
 
   // 摸牌阶段
@@ -1023,6 +1168,85 @@ export class GameEngine {
         this.saveDeckState(`${player.character.name}无中生有`, cards);
         return true;
 
+      case SpellCardName.INDULGENCE:
+        // 乐不思蜀：置于目标判定区
+        if (targets.length === 0) return false;
+        const indulgenceTarget = targets[0];
+        if (indulgenceTarget.isDead) return false;
+        if (indulgenceTarget.delayedSpells.indulgence) {
+          console.log(`${indulgenceTarget.character.name} 已经有【乐不思蜀】了`);
+          return false;
+        }
+
+        indulgenceTarget.delayedSpells.indulgence = card;
+        console.log(`${player.character.name} 对 ${indulgenceTarget.character.name} 使用了【乐不思蜀】`);
+
+        this.actionListeners.forEach(listener => listener({
+          action: GameAction.PLAY_CARD,
+          playerId: player.id,
+          cardId: card.id,
+          cardName: card.name,
+          targetIds: [indulgenceTarget.id],
+          logMessage: `${player.character.name} 对 ${indulgenceTarget.character.name} 使用了【乐不思蜀】`,
+          isEffectResult: true,
+        }));
+        return true;
+
+      case SpellCardName.SUPPLY_SHORTAGE:
+        // 兵粮寸断：置于目标判定区
+        if (targets.length === 0) return false;
+        const shortageTarget = targets[0];
+        if (shortageTarget.isDead) return false;
+        if (shortageTarget.delayedSpells.supplyShortage) {
+          console.log(`${shortageTarget.character.name} 已经有【兵粮寸断】了`);
+          return false;
+        }
+
+        // 检查距离是否为1
+        const distance = DistanceCalculator.calculateDistance(
+          player,
+          shortageTarget,
+          this.state.players
+        );
+        if (distance > 1) {
+          console.log(`${shortageTarget.character.name} 距离太远，无法使用【兵粮寸断】`);
+          return false;
+        }
+
+        shortageTarget.delayedSpells.supplyShortage = card;
+        console.log(`${player.character.name} 对 ${shortageTarget.character.name} 使用了【兵粮寸断】`);
+
+        this.actionListeners.forEach(listener => listener({
+          action: GameAction.PLAY_CARD,
+          playerId: player.id,
+          cardId: card.id,
+          cardName: card.name,
+          targetIds: [shortageTarget.id],
+          logMessage: `${player.character.name} 对 ${shortageTarget.character.name} 使用了【兵粮寸断】`,
+          isEffectResult: true,
+        }));
+        return true;
+
+      case SpellCardName.LIGHTNING:
+        // 闪电：置于自己判定区
+        if (player.delayedSpells.lightning) {
+          console.log(`${player.character.name} 已经有【闪电】了`);
+          return false;
+        }
+
+        player.delayedSpells.lightning = card;
+        console.log(`${player.character.name} 使用了【闪电】`);
+
+        this.actionListeners.forEach(listener => listener({
+          action: GameAction.PLAY_CARD,
+          playerId: player.id,
+          cardId: card.id,
+          cardName: card.name,
+          logMessage: `${player.character.name} 使用了【闪电】`,
+          isEffectResult: true,
+        }));
+        return true;
+
       default:
         return false;
     }
@@ -1222,7 +1446,7 @@ export class GameEngine {
     console.log(`${target.character.name} 受到 ${amount} 点${damageTypeText}伤害，剩余体力: ${target.character.hp}`);
 
     // 触发受伤技能（简化版）
-    this.triggerSkill(target, 'ON_DAMAGE', { fromPlayer, amount, damageType });
+    this.triggerSkill(target, SkillTrigger.ON_DAMAGE, { fromPlayer, amount, damageType });
 
     if (target.character.hp <= 0) {
       console.log(`${target.character.name} 体力降至0或以下，准备处理死亡`);
@@ -1240,14 +1464,32 @@ export class GameEngine {
   // 触发技能（简化版）
   private triggerSkill(
     player: Player,
-    trigger: string,
-    // @ts-ignore - 保留以备后续使用
-    context: any
+    trigger: SkillTrigger,
+    context: {
+      fromPlayer?: Player;
+      amount?: number;
+      damageType?: 'normal' | 'fire' | 'thunder';
+      card?: Card;
+    }
   ): void {
     player.character.skills.forEach(skill => {
-      if (skill.trigger === trigger && !skill.isPassive) {
+      if (skill.trigger === trigger) {
         console.log(`${player.character.name} 触发了技能 ${skill.name}`);
-        // 这里可以执行技能效果
+
+        // 构建技能上下文
+        const skillContext: SkillContext = {
+          player,
+          game: this.state,
+          target: context.fromPlayer,
+          card: context.card,
+        };
+
+        // 执行技能
+        try {
+          skill.execute(skillContext);
+        } catch (error) {
+          console.error(`执行技能 ${skill.name} 时出错:`, error);
+        }
       }
     });
   }
@@ -1263,7 +1505,7 @@ export class GameEngine {
 
     if (healedAmount > 0) {
       // 触发治疗技能
-      this.triggerSkill(player, 'ON_HEAL', { amount: healedAmount });
+      this.triggerSkill(player, SkillTrigger.ON_HEAL, { amount: healedAmount });
     }
   }
 

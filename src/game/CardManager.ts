@@ -133,6 +133,48 @@ export class CardManager {
       }
     });
 
+    // 延时锦囊牌
+    // 乐不思蜀 (3张) - 红桃、方块、黑桃
+    const indulgenceSuits = [CardSuit.HEART, CardSuit.DIAMOND, CardSuit.SPADE];
+    indulgenceSuits.forEach((suit, index) => {
+      deck.push({
+        id: this.generateId(),
+        name: SpellCardName.INDULGENCE,
+        type: CardType.SPELL,
+        suit,
+        number: index + 1,
+        color: this.getSuitColor(suit),
+        description: '出牌阶段，对一名其他角色使用。将【乐不思蜀】置于该角色的判定区里。该角色的判定阶段，需进行判定：若结果不为红桃，则跳过其出牌阶段。',
+      });
+    });
+
+    // 兵粮寸断 (2张) - 梅花、黑桃
+    const supplyShortageSuits = [CardSuit.CLUB, CardSuit.SPADE];
+    supplyShortageSuits.forEach((suit, index) => {
+      deck.push({
+        id: this.generateId(),
+        name: SpellCardName.SUPPLY_SHORTAGE,
+        type: CardType.SPELL,
+        suit,
+        number: index + 1,
+        color: CardColor.BLACK,
+        description: '出牌阶段，对一名距离为1的其他角色使用。将【兵粮寸断】置于该角色的判定区里。该角色的判定阶段，需进行判定：若结果不为梅花，则跳过其摸牌阶段。',
+      });
+    });
+
+    // 闪电 (2张) - 黑桃
+    for (let i = 0; i < 2; i++) {
+      deck.push({
+        id: this.generateId(),
+        name: SpellCardName.LIGHTNING,
+        type: CardType.SPELL,
+        suit: CardSuit.SPADE,
+        number: i + 1,
+        color: CardColor.BLACK,
+        description: '出牌阶段，对你使用。将【闪电】置于你的判定区里。你的判定阶段，需进行判定：若结果为黑桃2-9，则你受到3点雷电伤害，并将【闪电】弃置；否则，将【闪电】移动到下家的判定区里。',
+      });
+    }
+
     // 装备牌
     // 武器 - 每种只有1张
     const weapons = [

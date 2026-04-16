@@ -39,6 +39,10 @@ export enum SpellCardName {
   SAVAGE = '南蛮入侵',
   DRAW_TWO = '无中生有',
   NULLIFICATION = '无懈可击',
+  // 延时锦囊牌
+  INDULGENCE = '乐不思蜀',
+  SUPPLY_SHORTAGE = '兵粮寸断',
+  LIGHTNING = '闪电',
 }
 
 // 装备类型
@@ -100,7 +104,7 @@ export enum SkillTrigger {
   ON_DEATH = 'on_death',
 }
 
-// 技能接口
+// 技能接口（兼容旧版和新版技能系统）
 export interface Skill {
   id: string;
   name: string;
@@ -109,6 +113,8 @@ export interface Skill {
   isPassive: boolean;
   useLimit?: number;
   execute: (context: SkillContext) => void;
+  // 新版技能系统字段
+  skillClassName?: string;  // 对应新版技能类的名称
 }
 
 // 技能上下文
@@ -131,6 +137,13 @@ export interface Character {
   avatar: string;
 }
 
+// 延时锦囊牌区域
+export interface DelayedSpellZone {
+  indulgence?: Card;  // 乐不思蜀
+  supplyShortage?: Card;  // 兵粮寸断
+  lightning?: Card;  // 闪电
+}
+
 // 玩家接口
 export interface Player {
   id: string;
@@ -143,6 +156,7 @@ export interface Player {
     horsePlus?: Card;
     horseMinus?: Card;
   };
+  delayedSpells: DelayedSpellZone;  // 延时锦囊牌区域
   isDead: boolean;
   isAI: boolean;
 }

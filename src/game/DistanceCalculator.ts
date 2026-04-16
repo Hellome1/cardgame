@@ -2,39 +2,48 @@ import { Player } from '../types/game';
 
 export class DistanceCalculator {
   /**
+   * 检查玩家是否有马术技能
+   */
+  static hasMashuSkill(player: Player): boolean {
+    return player.character.skills.some(skill => skill.id === 'mashu');
+  }
+
+  /**
    * 计算两个玩家之间的距离（从 fromPlayer 到 toPlayer 的攻击距离）
-   * 
+   *
    * 基础距离 = 座位之间的最短距离
-   * 最终距离 = 基础距离 - fromPlayer的-1马 + toPlayer的+1马
+   * 最终距离 = 基础距离 - fromPlayer的-1马 - fromPlayer的马术技能 + toPlayer的+1马
    */
   static calculateDistance(fromPlayer: Player, toPlayer: Player, allPlayers: Player[]): number {
     if (fromPlayer.id === toPlayer.id) return 0;
-    
+
     // 获取存活玩家列表（保持座位顺序）
     const alivePlayers = allPlayers.filter(p => !p.isDead);
     const fromIndex = alivePlayers.findIndex(p => p.id === fromPlayer.id);
     const toIndex = alivePlayers.findIndex(p => p.id === toPlayer.id);
-    
+
     if (fromIndex === -1 || toIndex === -1) return Infinity;
-    
+
     const totalPlayers = alivePlayers.length;
-    
+
     // 计算顺时针距离
     const clockwiseDistance = (toIndex - fromIndex + totalPlayers) % totalPlayers;
     // 计算逆时针距离
     const counterClockwiseDistance = (fromIndex - toIndex + totalPlayers) % totalPlayers;
-    
+
     // 基础距离取最短路径
     let baseDistance = Math.min(clockwiseDistance, counterClockwiseDistance);
-    
+
     // 应用马的影响
     // -1马：减少与其他玩家的距离
     const horseMinus = fromPlayer.equipment.horseMinus ? 1 : 0;
     // +1马：增加其他玩家与自己的距离
     const horsePlus = toPlayer.equipment.horsePlus ? 1 : 0;
-    
-    const finalDistance = baseDistance - horseMinus + horsePlus;
-    
+    // 马术技能：马超的锁定技，距离-1
+    const mashuSkill = this.hasMashuSkill(fromPlayer) ? 1 : 0;
+
+    const finalDistance = baseDistance - horseMinus - mashuSkill + horsePlus;
+
     // 距离至少为1
     return Math.max(1, finalDistance);
   }

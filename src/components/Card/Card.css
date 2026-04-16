@@ -24,9 +24,8 @@
 }
 
 .card.disabled {
-  opacity: 0.5;
   cursor: not-allowed;
-  filter: grayscale(100%);
+  filter: grayscale(100%) brightness(0.7);
 }
 
 .card.disabled:hover {

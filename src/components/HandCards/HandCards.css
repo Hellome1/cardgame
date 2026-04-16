@@ -1,7 +1,12 @@
 .hand-cards-container {
   position: relative;
+  width: 100%;
   height: 160px;
-  padding: 10px 0;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-sizing: border-box;
   overflow: visible;
 }
 
@@ -9,27 +14,27 @@
 .hand-card-wrapper {
   position: absolute;
   top: 10px;
-  transition: all 0.2s ease;
+  left: 0;
+  transition: transform 0.2s ease, z-index 0s;
+  cursor: pointer;
 }
 
 .hand-card-wrapper:hover {
-  transform: translateY(-10px);
-  z-index: 100 !important;
+  z-index: 1000 !important;
+  transform: translateY(-15px) scale(1.05) !important;
 }
 
 .hand-card-wrapper.selected {
-  transform: translateY(-15px);
   z-index: 100 !important;
 }
 
-.hand-card-wrapper.stacked:hover {
-  transform: translateY(-10px);
-  margin-right: 20px;
+.hand-card-wrapper.selected .card {
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+  border-color: #ffd700;
 }
 
-.hand-card-wrapper.stacked.selected:hover {
-  transform: translateY(-15px);
-  margin-right: 20px;
+.hand-card-wrapper.stacked:hover {
+  transform: translateY(-15px) scale(1.08) !important;
 }
 
 /* 堆叠时的小号牌名 */
@@ -41,7 +46,7 @@
   font-size: 10px;
   font-weight: bold;
   color: #333;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.95);
   padding: 1px 4px;
   border-radius: 3px;
   white-space: nowrap;
@@ -49,13 +54,21 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-/* 卡牌禁用状态 */
-.hand-card-wrapper .card.disabled {
-  opacity: 0.5;
+/* 卡牌禁用状态 - 使用亮度而不是透明度 */
+.hand-card-wrapper.disabled {
+  filter: brightness(0.6);
   cursor: not-allowed;
-  filter: grayscale(100%);
 }
 
-.hand-card-wrapper .card.disabled:hover {
+.hand-card-wrapper.disabled:hover {
+  transform: none;
+}
+
+.hand-card-wrapper.invalid {
+  filter: brightness(0.5) grayscale(0.5);
+  cursor: not-allowed;
+}
+
+.hand-card-wrapper.invalid:hover {
   transform: none;
 }

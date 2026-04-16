@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { Card as CardType, GamePhase, Player, PendingResponse } from '../../types/game';
 import { Card } from '../Card/Card';
 import './HandCards.css';
@@ -45,12 +45,27 @@ export const HandCards: React.FC<HandCardsProps> = ({
   isCardPlayable,
   onCardClick,
 }) => {
-  const containerWidth = 1000; // 手牌区域宽度（增加宽度以容纳更多牌）
-  const cardWidth = 120; // 单张牌宽度
-  const defaultGap = 5; // 默认正数间隙
-  const minGap = -80; // 最小间隙（负数表示堆叠，最多重叠80px）
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(800);
+  const cardWidth = 100; // 单张牌宽度（与Card组件一致）
+  const defaultGap = 10; // 默认间隙（不堆叠）
+  const minVisibleWidth = 30; // 堆叠时最小可见宽度（保证能看到卡牌）
 
-  // 计算每张牌的偏移量 - 每次手牌变化都会重新计算
+  // 动态获取容器宽度
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        const width = containerRef.current.clientWidth;
+        setContainerWidth(width);
+      }
+    };
+
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
+
+  // 计算每张牌的偏移量
   const cardPositions = useMemo(() => {
     const totalCards = cards.length;
     if (totalCards === 0) return [];
@@ -59,10 +74,10 @@ export const HandCards: React.FC<HandCardsProps> = ({
       return [{ offset: 0, isStacked: false, zIndex: 0 }];
     }
 
-    // 先计算使用默认间隙时的总宽度
+    // 计算手牌使用默认间隙时的总宽度
     const totalWidthWithDefaultGap = totalCards * cardWidth + (totalCards - 1) * defaultGap;
 
-    // 如果使用默认间隙能放下，使用默认间隙
+    // 情况1：使用默认间隙不会溢出 - 保持原有间隙，不堆叠
     if (totalWidthWithDefaultGap <= containerWidth) {
       return cards.map((_, index) => ({
         offset: index * (cardWidth + defaultGap),
@@ -71,23 +86,18 @@ export const HandCards: React.FC<HandCardsProps> = ({
       }));
     }
 
-    // 放不下，重新计算间隙（间隙可以为负数，即重叠）
-    // 让所有牌刚好能放入容器
-    // containerWidth = totalCards * cardWidth + (totalCards - 1) * gap
-    // gap = (containerWidth - totalCards * cardWidth) / (totalCards - 1)
-    let dynamicGap = (containerWidth - totalCards * cardWidth) / (totalCards - 1);
-    
-    // 限制最小间隙，避免过度堆叠导致卡牌完全看不见
-    if (dynamicGap < minGap) {
-      dynamicGap = minGap;
-    }
+    // 情况2：使用默认间隙会溢出 - 需要缩小间隙（产生堆叠效果）
+    // 计算需要的间隙，使最后一张牌的右边缘恰好对齐容器右边缘
+    // 总宽度 = n * cardWidth + (n-1) * gap = containerWidth
+    // 所以 gap = (containerWidth - n * cardWidth) / (n - 1)
+    const dynamicGap = (containerWidth - totalCards * cardWidth) / (totalCards - 1);
 
     return cards.map((_, index) => ({
       offset: index * (cardWidth + dynamicGap),
-      isStacked: true,
+      isStacked: true, // 标记为堆叠状态
       zIndex: index,
     }));
-  }, [cards]); // 依赖 cards，每次手牌变化都会重新计算
+  }, [cards, containerWidth]);
 
   const isPlayPhase = gamePhase === GamePhase.PLAY;
   const isDiscardPhase = gamePhase === GamePhase.DISCARD;
@@ -101,7 +111,7 @@ export const HandCards: React.FC<HandCardsProps> = ({
   const isResponseTarget = pendingResponse && currentTurnId === humanPlayer.id;
 
   return (
-    <div className="hand-cards-container" style={{ width: '100%', maxWidth: containerWidth }}>
+    <div className="hand-cards-container" ref={containerRef} style={{ width: '100%', maxWidth: containerWidth }}>
       {cards.map((card, index) => {
         const position = cardPositions[index];
         if (!position) return null;
