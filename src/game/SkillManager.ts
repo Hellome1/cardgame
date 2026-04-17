@@ -1,4 +1,4 @@
-import { Player, Skill, SkillTrigger, SkillContext, Card, CardType, BasicCardName, SpellCardName, GamePhase, CardSuit } from '../types/game';
+import { Player, Skill, SkillTrigger, SkillContext, Card, CardType, BasicCardName, SpellCardName, CardSuit, CardColor } from '../types/game';
 import { GameEngine } from './GameEngine';
 
 /**
@@ -10,6 +10,13 @@ export class SkillManager {
 
   constructor(engine: GameEngine) {
     this.engine = engine;
+  }
+
+  /**
+   * 获取游戏引擎
+   */
+  getEngine(): GameEngine {
+    return this.engine;
   }
 
   /**
@@ -68,7 +75,7 @@ export class SkillManager {
    * 周瑜 - 英姿：摸牌阶段多摸一张牌
    */
   static yingzi(context: SkillContext): void {
-    const { player, game } = context;
+    const { player } = context;
     console.log(`${player.character.name} 发动【英姿】，摸牌阶段多摸一张牌`);
     // 在摸牌阶段额外摸一张牌
     // 这个效果需要在 GameEngine 的 drawPhase 中处理
@@ -398,7 +405,6 @@ export class SkillManager {
     }
     
     // 弃置所有手牌
-    const discardedCards = [...player.handCards];
     player.handCards.forEach(card => {
       game.discardPile.push(card);
     });
@@ -453,7 +459,7 @@ export class SkillManager {
    * 周瑜 - 反间：出牌阶段限一次，展示手牌给目标，目标猜花色，猜错受到1点伤害
    */
   static fanjian(context: SkillContext): void {
-    const { player, target, game } = context;
+    const { player, target } = context;
     console.log(`${player.character.name} 发动【反间】`);
     
     if (!target) {

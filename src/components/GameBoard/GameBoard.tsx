@@ -3,6 +3,7 @@ import { useGameStore } from '../../store/gameStore';
 import { Card } from '../Card/Card';
 import { PlayerAvatar } from '../PlayerAvatar/PlayerAvatar';
 import { HandCards } from '../HandCards/HandCards';
+import { DebugSetup, DebugConfig } from '../DebugSetup/DebugSetup';
 import { GamePhase, Identity, CardType, SpellCardName, BasicCardName, ResponseType, Card as GameCard } from '../../types/game';
 import { DistanceCalculator } from '../../game/DistanceCalculator';
 import './GameBoard.css';
@@ -143,8 +144,8 @@ export const GameBoard: React.FC = () => {
   // 响应阶段选择状态
   const [selectedResponseCard, setSelectedResponseCard] = useState<string | null>(null);
 
-  // 缩放比例状态
-  const [scale, setScale] = useState(1);
+  // 调试模式状态
+  const [showDebugSetup, setShowDebugSetup] = useState(false);
 
   // 玩家头像DOM引用
   const playerRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -169,34 +170,6 @@ export const GameBoard: React.FC = () => {
     }).catch(e => {
       console.error('[GameBoard] Logger 初始化失败:', e);
     });
-  }, []);
-
-  // 计算并设置缩放比例
-  useEffect(() => {
-    const calculateScale = () => {
-      // 设计时的标准尺寸 - 必须与CSS中的尺寸一致
-      const designWidth = 1400;
-      const designHeight = 900;
-
-      // 获取视口大小
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-
-      // 计算缩放比例，让游戏界面刚好充满可视区域
-      const scaleX = viewportWidth / designWidth;
-      const scaleY = viewportHeight / designHeight;
-      // 取较小值确保内容完全显示在可视区域内
-      const newScale = Math.min(scaleX, scaleY);
-
-      setScale(newScale);
-    };
-
-    // 初始计算
-    calculateScale();
-
-    // 监听窗口大小变化
-    window.addEventListener('resize', calculateScale);
-    return () => window.removeEventListener('resize', calculateScale);
   }, []);
 
   // 计时器效果
@@ -386,7 +359,7 @@ export const GameBoard: React.FC = () => {
     return () => clearTimeout(clearTimer);
   }, [cardAnimation]);
 
-  // 在开始界面自动清空日志
+  // 在开始界面自动清空日志并检查/删除非当日日志
   useEffect(() => {
     if (!isGameStarted) {
       // 当回到开始界面时，重置标志并清空日志
@@ -395,9 +368,31 @@ export const GameBoard: React.FC = () => {
         try {
           // @ts-ignore - 动态导入 Logger
           const { logger } = await import('../../utils/Logger');
-          if (logger && typeof logger.clearAllLogs === 'function') {
-            await logger.clearAllLogs();
-            console.log('游戏开始界面：日志已自动清空');
+          if (logger) {
+            // 1. 先获取日志文件列表
+            const logFilesResult = await logger.getLogFiles();
+            if (logFilesResult.success) {
+              console.log(`游戏开始界面：发现 ${logFilesResult.count || 0} 个日志文件`, logFilesResult.files);
+            }
+
+            // 2. 清理非当日日志
+            if (typeof logger.cleanupOldLogs === 'function') {
+              const cleanupResult = await logger.cleanupOldLogs();
+              if (cleanupResult.success) {
+                console.log(`游戏开始界面：${cleanupResult.message}`);
+                if (cleanupResult.count && cleanupResult.count > 0) {
+                  console.log('已删除的非当日日志文件:', cleanupResult.deleted);
+                }
+              } else {
+                console.error('清理非当日日志失败:', cleanupResult.error);
+              }
+            }
+
+            // 3. 清空当前日志内容
+            if (typeof logger.clearAllLogs === 'function') {
+              await logger.clearAllLogs();
+              console.log('游戏开始界面：当前日志已清空');
+            }
           }
         } catch (e) {
           console.error('自动清空日志失败:', e);
@@ -407,16 +402,36 @@ export const GameBoard: React.FC = () => {
     }
   }, [isGameStarted]);
 
+  // 处理调试模式开始
+  const handleDebugStart = (config: DebugConfig) => {
+    setShowDebugSetup(false);
+    const engine = useGameStore.getState().engine;
+    if (engine) {
+      engine.startDebugGame(config);
+    }
+  };
+
   if (!isGameStarted) {
     return (
-      <div className="start-screen">
-        <h1 className="start-title">三国卡牌</h1>
-        <div className="start-buttons">
-          <button className="start-btn" onClick={() => startGame(4)}>
-            开始游戏
-          </button>
+      <>
+        <div className="start-screen">
+          <h1 className="start-title">三国卡牌</h1>
+          <div className="start-buttons">
+            <button className="start-btn" onClick={() => startGame(4)}>
+              开始游戏
+            </button>
+            <button className="debug-btn" onClick={() => setShowDebugSetup(true)}>
+              调试模式
+            </button>
+          </div>
         </div>
-      </div>
+        {showDebugSetup && (
+          <DebugSetup
+            onStartDebug={handleDebugStart}
+            onCancel={() => setShowDebugSetup(false)}
+          />
+        )}
+      </>
     );
   }
 

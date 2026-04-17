@@ -22,7 +22,7 @@ export class RenDeSkill extends ActiveSkill {
   }
 
   protected onExecute(context: SkillContext): SkillResult {
-    const { player, target, engine } = context;
+    const { player, target } = context;
 
     if (!target) {
       return { success: false, message: '需要选择目标' };
@@ -161,7 +161,7 @@ export class GuanXingSkill extends PassiveSkill {
   }
 
   protected onExecute(context: SkillContext): SkillResult {
-    const { player, game, engine } = context;
+    const { player, game } = context;
 
     // 计算X（存活角色数，最多5）
     const aliveCount = game.players.filter(p => !p.isDead).length;

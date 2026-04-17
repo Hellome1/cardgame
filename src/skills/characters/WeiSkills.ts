@@ -1,5 +1,5 @@
-import { SkillContext, SkillResult, PassiveSkill, LockedSkill, ActiveSkill } from '../base/Skill';
-import { SkillTrigger, CardSuit, BasicCardName } from '../../types/game';
+import { SkillContext, SkillResult, PassiveSkill } from '../base/Skill';
+import { SkillTrigger, CardSuit } from '../../types/game';
 
 /**
  * 曹操 - 奸雄：当你受到伤害后，你可以获得对你造成伤害的牌，并摸一张牌。
@@ -232,7 +232,7 @@ export class TuXiSkill extends PassiveSkill {
   }
 
   protected onExecute(context: SkillContext): SkillResult {
-    const { player, game, engine } = context;
+    const { player, game } = context;
     
     // 获取有手牌的其他角色
     const targets = game.players.filter(

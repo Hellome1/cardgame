@@ -37,77 +37,122 @@ import {
   LuanWuSkill,
 } from '../skills';
 
+// 技能类映射表
+const skillClassMap: Record<string, new () => any> = {
+  jianxiong: JianXiongSkill,
+  fankui: FanKuiSkill,
+  guicai: GuiCaiSkill,
+  ganglie: GangLieSkill,
+  tuxi: TuXiSkill,
+  rende: RenDeSkill,
+  wusheng: WuShengSkill,
+  paoxiao: PaoXiaoSkill,
+  guanxing: GuanXingSkill,
+  kongcheng: KongChengSkill,
+  longdan: LongDanSkill,
+  tieji: TieJiSkill,
+  zhiheng: ZhiHengSkill,
+  yingzi: YingZiSkill,
+  fanjian: FanJianSkill,
+  keji: KeJiSkill,
+  kurou: KuRouSkill,
+  guose: GuoSeSkill,
+  liuli: LiuLiSkill,
+  xiaoji: XiaoJiSkill,
+  qianxun: QianXunSkill,
+  lianying: LianYingSkill,
+  wushuang: WuShuangSkill,
+  jijiu: JiJiuSkill,
+  qingnang: QingNangSkill,
+  lijian: LiJianSkill,
+  biyue: BiYueSkill,
+  luanji: LuanJiSkill,
+  jiuchi: JiuChiSkill,
+  wansha: WanShaSkill,
+  luanwu: LuanWuSkill,
+};
+
+// 武将技能映射表：武将ID -> 技能ID数组
+const characterSkillMap: Record<string, string[]> = {
+  caocao: ['jianxiong'],
+  simayi: ['fankui', 'guicai'],
+  xiahoudun: ['ganglie'],
+  zhangliao: ['tuxi'],
+  liubei: ['rende'],
+  guanyu: ['wusheng'],
+  zhangfei: ['paoxiao'],
+  zhugeliang: ['guanxing', 'kongcheng'],
+  zhaoyun: ['longdan'],
+  machao: ['tieji'],
+  sunquan: ['zhiheng'],
+  zhouyu: ['yingzi', 'fanjian'],
+  lumeng: ['keji'],
+  huanggai: ['kurou'],
+  daqiao: ['guose', 'liuli'],
+  sunshangxiang: ['xiaoji'],
+  luxun: ['qianxun', 'lianying'],
+  lvbu: ['wushuang'],
+  huatuo: ['jijiu', 'qingnang'],
+  diaochan: ['lijian', 'biyue'],
+  yuanshao: ['luanji'],
+  dongzhuo: ['jiuchi'],
+  jiaxu: ['wansha', 'luanwu'],
+};
+
 export class CharacterManager {
   private static instance: CharacterManager;
   private characters: Map<string, Character> = new Map();
-  private skillsInitialized: boolean = false;
 
   static getInstance(): CharacterManager {
     if (!CharacterManager.instance) {
       CharacterManager.instance = new CharacterManager();
       CharacterManager.instance.initCharacters();
-      CharacterManager.instance.initSkillSystem();
     }
     return CharacterManager.instance;
   }
 
   /**
-   * 初始化新版技能系统
+   * 根据场上武将注册技能（游戏开始时调用）
+   * @param characterIds 场上武将ID列表
    */
-  private initSkillSystem(): void {
-    if (this.skillsInitialized) return;
-
+  registerSkillsForCharacters(characterIds: string[]): void {
     const registry = SkillRegistry.getInstance();
+    const registeredSkills = new Set<string>();
 
-    // 注册魏国技能
-    registry.registerMany([
-      JianXiongSkill,
-      FanKuiSkill,
-      GuiCaiSkill,
-      GangLieSkill,
-      TuXiSkill,
-    ]);
+    console.log('根据场上武将注册技能:', characterIds);
 
-    // 注册蜀国技能
-    registry.registerMany([
-      RenDeSkill,
-      WuShengSkill,
-      PaoXiaoSkill,
-      GuanXingSkill,
-      KongChengSkill,
-      LongDanSkill,
-      TieJiSkill,
-    ]);
+    for (const characterId of characterIds) {
+      const skillIds = characterSkillMap[characterId];
+      if (skillIds) {
+        for (const skillId of skillIds) {
+          const skillClass = skillClassMap[skillId];
+          if (skillClass && !registeredSkills.has(skillId)) {
+            registry.register(skillClass);
+            registeredSkills.add(skillId);
+            console.log(`注册技能: ${skillId}`);
+          }
+        }
+      }
+    }
 
-    // 注册吴国技能
-    registry.registerMany([
-      ZhiHengSkill,
-      YingZiSkill,
-      FanJianSkill,
-      KeJiSkill,
-      KuRouSkill,
-      GuoSeSkill,
-      LiuLiSkill,
-      XiaoJiSkill,
-      QianXunSkill,
-      LianYingSkill,
-    ]);
+    console.log(`技能注册完成，共注册 ${registeredSkills.size} 个技能`);
+  }
 
-    // 注册群雄技能
-    registry.registerMany([
-      WuShuangSkill,
-      JiJiuSkill,
-      QingNangSkill,
-      LiJianSkill,
-      BiYueSkill,
-      LuanJiSkill,
-      JiuChiSkill,
-      WanShaSkill,
-      LuanWuSkill,
-    ]);
+  /**
+   * 重置技能注册状态（用于重新开始游戏）
+   */
+  resetSkillRegistration(): void {
+    const registry = SkillRegistry.getInstance();
+    registry.clear();
+    console.log('技能注册状态已重置');
+  }
 
-    this.skillsInitialized = true;
-    console.log('技能系统初始化完成');
+  /**
+   * 获取武将的技能ID列表
+   * @param characterId 武将ID
+   */
+  getCharacterSkillIds(characterId: string): string[] {
+    return characterSkillMap[characterId] || [];
   }
 
   private initCharacters() {
@@ -204,7 +249,7 @@ export class CharacterManager {
         {
           id: 'tuxi',
           name: '突袭',
-          description: '摸牌阶段，你可以改为获得至多两名其他角色的各一张手牌。',
+          description: '摸牌阶段，你可以改为获得至多两名其他角色各一张手牌。',
           trigger: SkillTrigger.ON_DRAW,
           isPassive: false,
           skillClassName: 'tuxi',
@@ -228,7 +273,7 @@ export class CharacterManager {
         {
           id: 'rende',
           name: '仁德',
-          description: '出牌阶段，你可以将任意张手牌交给其他角色，然后你于此阶段内给出第二张"仁德"牌时，你回复1点体力。',
+          description: '出牌阶段，你可以将任意张手牌交给其他角色，然后你回复1点体力。',
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           skillClassName: 'rende',
@@ -274,12 +319,12 @@ export class CharacterManager {
         {
           id: 'paoxiao',
           name: '咆哮',
-          description: '锁定技，你于出牌阶段内使用【杀】无次数限制。',
+          description: '锁定技，出牌阶段，你使用【杀】无次数限制。',
           trigger: SkillTrigger.PLAY,
           isPassive: true,
           skillClassName: 'paoxiao',
-          execute: (context: SkillContext) => {
-            SkillManager.paoxiao(context);
+          execute: () => {
+            // 被动技能，在GameEngine中处理
           },
         },
       ],
@@ -297,7 +342,7 @@ export class CharacterManager {
         {
           id: 'guanxing',
           name: '观星',
-          description: '准备阶段，你可以观看牌堆顶的X张牌（X为存活角色数且至多为5），然后以任意顺序放回牌堆顶或牌堆底。',
+          description: '准备阶段，你可以观看牌堆顶的X张牌（X为存活角色数且至多为5），然后将这些牌以任意顺序置于牌堆顶或牌堆底。',
           trigger: SkillTrigger.TURN_START,
           isPassive: false,
           skillClassName: 'guanxing',
@@ -312,8 +357,8 @@ export class CharacterManager {
           trigger: SkillTrigger.ON_ATTACKED,
           isPassive: true,
           skillClassName: 'kongcheng',
-          execute: (context: SkillContext) => {
-            SkillManager.kongcheng(context);
+          execute: () => {
+            // 被动技能，在GameEngine中处理
           },
         },
       ],
@@ -331,7 +376,7 @@ export class CharacterManager {
         {
           id: 'longdan',
           name: '龙胆',
-          description: '你可以将【杀】当【闪】，【闪】当【杀】使用或打出。',
+          description: '你可以将一张【杀】当【闪】使用或打出，或将一张【闪】当【杀】使用或打出。',
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           skillClassName: 'longdan',
@@ -354,23 +399,12 @@ export class CharacterManager {
         {
           id: 'tieji',
           name: '铁骑',
-          description: '当你使用【杀】指定一个目标后，你可以进行判定，若结果不为红桃，该角色需弃置一张与判定牌花色相同的牌才能使用【闪】响应此【杀】，且该角色的非锁定技于此回合内失效。',
-          trigger: SkillTrigger.AFTER_PLAY,
+          description: '当你使用【杀】指定目标后，你可以进行判定，若结果为红色，该角色不能使用【闪】响应此【杀】。',
+          trigger: SkillTrigger.ON_ATTACKED,
           isPassive: false,
           skillClassName: 'tieji',
           execute: (context: SkillContext) => {
             SkillManager.tieji(context);
-          },
-        },
-        {
-          id: 'mashu',
-          name: '马术',
-          description: '锁定技，你计算与其他角色的距离时，始终-1。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: true,
-          skillClassName: 'mashu',
-          execute: (context: SkillContext) => {
-            SkillManager.mashu(context);
           },
         },
       ],
@@ -392,7 +426,6 @@ export class CharacterManager {
           description: '出牌阶段限一次，你可以弃置任意张牌，然后摸等量的牌。',
           trigger: SkillTrigger.PLAY,
           isPassive: false,
-          useLimit: 1,
           skillClassName: 'zhiheng',
           execute: (context: SkillContext) => {
             SkillManager.zhiheng(context);
@@ -424,10 +457,9 @@ export class CharacterManager {
         {
           id: 'fanjian',
           name: '反间',
-          description: '出牌阶段限一次，你可以展示一张手牌并交给一名其他角色，其选择一种花色后获得此牌，若选择的花色与此牌不同，你对其造成1点伤害。',
+          description: '出牌阶段限一次，你可以展示一张手牌并交给一名其他角色，其选择一项：1.展示所有手牌并弃置与此牌同花色的牌；2.失去1点体力。',
           trigger: SkillTrigger.PLAY,
           isPassive: false,
-          useLimit: 1,
           skillClassName: 'fanjian',
           execute: (context: SkillContext) => {
             SkillManager.fanjian(context);
@@ -448,12 +480,12 @@ export class CharacterManager {
         {
           id: 'keji',
           name: '克己',
-          description: '若你于出牌阶段内未使用或打出过【杀】，你可以跳过弃牌阶段。',
-          trigger: SkillTrigger.TURN_END,
-          isPassive: false,
+          description: '若你于出牌阶段未使用或打出过【杀】，你可以跳过弃牌阶段。',
+          trigger: SkillTrigger.ON_DISCARD,
+          isPassive: true,
           skillClassName: 'keji',
-          execute: (context: SkillContext) => {
-            SkillManager.keji(context);
+          execute: () => {
+            // 被动技能，在GameEngine中处理
           },
         },
       ],
@@ -555,8 +587,8 @@ export class CharacterManager {
           trigger: SkillTrigger.ON_ATTACKED,
           isPassive: true,
           skillClassName: 'qianxun',
-          execute: (context: SkillContext) => {
-            SkillManager.qianxun(context);
+          execute: () => {
+            // 被动技能，在GameEngine中处理
           },
         },
         {
@@ -586,12 +618,12 @@ export class CharacterManager {
         {
           id: 'wushuang',
           name: '无双',
-          description: '锁定技，当你使用【杀】指定一个目标后，该角色需依次使用两张【闪】才能抵消；当你使用【决斗】指定一个目标后，或成为一名角色使用【决斗】的目标后，该角色需依次打出两张【杀】才能响应。',
-          trigger: SkillTrigger.PLAY,
+          description: '锁定技，当你使用【杀】指定目标后，该角色需依次使用两张【闪】才能抵消；当你使用【决斗】指定目标后，该角色需依次打出两张【杀】才能响应。',
+          trigger: SkillTrigger.ON_ATTACKED,
           isPassive: true,
           skillClassName: 'wushuang',
-          execute: (context: SkillContext) => {
-            SkillManager.wushuang(context);
+          execute: () => {
+            // 被动技能，在GameEngine中处理
           },
         },
       ],
@@ -610,7 +642,7 @@ export class CharacterManager {
           id: 'jijiu',
           name: '急救',
           description: '你的回合外，你可以将一张红色牌当【桃】使用。',
-          trigger: SkillTrigger.ON_HEAL,
+          trigger: SkillTrigger.PLAY,
           isPassive: false,
           skillClassName: 'jijiu',
           execute: (context: SkillContext) => {
@@ -620,10 +652,9 @@ export class CharacterManager {
         {
           id: 'qingnang',
           name: '青囊',
-          description: '出牌阶段限一次，你可以弃置一张手牌，然后令一名已受伤的角色回复1点体力。',
+          description: '出牌阶段限一次，你可以弃置一张手牌，令一名角色回复1点体力。',
           trigger: SkillTrigger.PLAY,
           isPassive: false,
-          useLimit: 1,
           skillClassName: 'qingnang',
           execute: (context: SkillContext) => {
             SkillManager.qingnang(context);
@@ -647,10 +678,10 @@ export class CharacterManager {
           description: '出牌阶段限一次，你可以弃置一张牌，令一名男性角色视为对另一名男性角色使用一张【决斗】。',
           trigger: SkillTrigger.PLAY,
           isPassive: false,
-          useLimit: 1,
           skillClassName: 'lijian',
-          execute: (context: SkillContext) => {
-            SkillManager.lijian(context);
+          execute: () => {
+            // TODO: 实现离间技能
+            console.log('离间技能待实现');
           },
         },
         {
@@ -660,7 +691,7 @@ export class CharacterManager {
           trigger: SkillTrigger.TURN_END,
           isPassive: false,
           skillClassName: 'biyue',
-          execute: (context) => {
+          execute: (context: SkillContext) => {
             SkillManager.biyue(context);
           },
         },
@@ -729,8 +760,8 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: true,
           skillClassName: 'wansha',
-          execute: (context: SkillContext) => {
-            SkillManager.wansha(context);
+          execute: () => {
+            // 被动技能，在GameEngine中处理
           },
         },
         {
@@ -739,7 +770,6 @@ export class CharacterManager {
           description: '限定技，出牌阶段，你可以令所有其他角色依次选择一项：1.对距离最近的另一名角色使用一张【杀】；2.失去1点体力。',
           trigger: SkillTrigger.PLAY,
           isPassive: false,
-          useLimit: 1,
           skillClassName: 'luanwu',
           execute: (context: SkillContext) => {
             SkillManager.luanwu(context);

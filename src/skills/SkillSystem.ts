@@ -1,7 +1,5 @@
-import { Skill, SkillContext, SkillResult } from './base/Skill';
-import { SkillRegistry } from './SkillRegistry';
-import { Player, GameState, SkillTrigger } from '../types/game';
 import { GameEngine } from '../game/GameEngine';
+import { SkillRegistry } from './SkillRegistry';
 
 /**
  * 技能系统
@@ -15,3 +13,18 @@ export class SkillSystem {
     this.engine = engine;
     this.registry = SkillRegistry.getInstance();
   }
+
+  /**
+   * 获取游戏引擎
+   */
+  getEngine(): GameEngine {
+    return this.engine;
+  }
+
+  /**
+   * 获取技能注册表
+   */
+  getRegistry(): SkillRegistry {
+    return this.registry;
+  }
+}

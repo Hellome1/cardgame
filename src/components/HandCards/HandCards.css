@@ -2,18 +2,21 @@
   position: relative;
   width: 100%;
   height: 160px;
-  padding: 10px;
+  padding: 0 10px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-sizing: border-box;
   overflow: visible;
+  display: flex;
+  align-items: center;
 }
 
 /* 所有手牌使用绝对定位，由计算的 offset 控制位置 */
 .hand-card-wrapper {
   position: absolute;
-  top: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   left: 0;
   transition: transform 0.2s ease, z-index 0s;
   cursor: pointer;

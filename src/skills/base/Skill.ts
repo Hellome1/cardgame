@@ -176,7 +176,7 @@ export abstract class Skill {
   /**
    * 获取技能提示信息（用于UI显示）
    */
-  getHint(context: SkillContext): string {
+  getHint(_context: SkillContext): string {
     return '';
   }
 
@@ -185,7 +185,7 @@ export abstract class Skill {
    * @param context 技能上下文
    * @returns 目标玩家数组
    */
-  selectTargets(context: SkillContext): Player[] {
+  selectTargets(_context: SkillContext): Player[] {
     return [];
   }
 
@@ -205,7 +205,7 @@ export abstract class PassiveSkill extends Skill {
     super({ ...config, type: SkillType.PASSIVE });
   }
 
-  protected checkCanUse(context: SkillContext): boolean {
+  protected checkCanUse(_context: SkillContext): boolean {
     // 被动技能自动触发，不需要检查是否可以使用
     return true;
   }
@@ -219,7 +219,7 @@ export abstract class LockedSkill extends Skill {
     super({ ...config, type: SkillType.LOCKED });
   }
 
-  protected checkCanUse(context: SkillContext): boolean {
+  protected checkCanUse(_context: SkillContext): boolean {
     // 锁定技必须发动
     return true;
   }

@@ -110,7 +110,7 @@ export class FanJianSkill extends ActiveSkill {
   }
 
   protected onExecute(context: SkillContext): SkillResult {
-    const { player, target, engine } = context;
+    const { player, target } = context;
 
     if (!target) {
       return { success: false, message: '需要选择目标' };
@@ -169,7 +169,7 @@ export class KeJiSkill extends PassiveSkill {
     });
   }
 
-  protected checkCanUse(context: SkillContext): boolean {
+  protected checkCanUse(_context: SkillContext): boolean {
     // 本回合未使用或打出过杀
     return !this.hasUsedAttack;
   }
@@ -256,7 +256,7 @@ export class GuoSeSkill extends PassiveSkill {
   }
 
   protected onExecute(context: SkillContext): SkillResult {
-    const { player, target, engine } = context;
+    const { player, engine } = context;
 
     // 找到一张方块牌
     const diamondIndex = player.handCards.findIndex(card => card.suit === '♦');

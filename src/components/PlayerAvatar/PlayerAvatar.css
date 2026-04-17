@@ -458,3 +458,103 @@
 .identity-traitor {
   color: #9c27b0;
 }
+
+/* 武将牌外层包装器 */
+.player-avatar-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  position: relative;
+}
+
+/* 技能区 - 武将牌左边外面，下边对齐 */
+.player-skills-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-right: 6px;
+  margin-bottom: 4px;
+  z-index: 10;
+}
+
+/* 左边技能项样式 */
+.skill-item-left {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.2s ease;
+  position: relative;
+  min-width: 50px;
+  text-align: center;
+}
+
+/* 主动技能 - 可点击的按钮样式 */
+.skill-item-left.active {
+  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+  border: 1px solid #ff9800;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(255, 152, 0, 0.4);
+}
+
+.skill-item-left.active:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(255, 152, 0, 0.6);
+}
+
+.skill-item-left.active.selected {
+  box-shadow: 0 0 10px rgba(255, 152, 0, 0.8);
+  border-color: #ffd700;
+}
+
+/* 被动技能 - 透明背景，无法点击 */
+.skill-item-left.passive {
+  background: transparent;
+  border: 1px solid rgba(156, 39, 176, 0.5);
+  color: #ce93d8;
+  cursor: default;
+}
+
+.skill-item-left.passive:hover {
+  transform: none;
+}
+
+.skill-name-left {
+  font-weight: bold;
+}
+
+/* 左边技能详细描述弹窗 */
+.skill-tooltip-left {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background: rgba(0, 0, 0, 0.95);
+  border: 1px solid #666;
+  border-radius: 6px;
+  padding: 8px 12px;
+  min-width: 200px;
+  max-width: 250px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  margin-bottom: 8px;
+  pointer-events: none;
+}
+
+.skill-tooltip-left .skill-tooltip-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #ffd700;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #666;
+  padding-bottom: 4px;
+}
+
+.skill-tooltip-left .skill-tooltip-desc {
+  font-size: 12px;
+  color: #fff;
+  line-height: 1.5;
+  white-space: normal;
+}

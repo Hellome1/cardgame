@@ -343,6 +343,78 @@ ipcMain.handle('clear-discard-pile-logs', async () => {
   return clearDiscardPileLogFile();
 });
 
+// 获取logs文件夹下的所有日志文件
+const getLogFiles = () => {
+  try {
+    const projectRoot = path.join(__dirname, '..');
+    const logsDir = path.join(projectRoot, 'logs');
+    
+    if (!fs.existsSync(logsDir)) {
+      return { success: true, files: [], message: 'logs文件夹不存在' };
+    }
+    
+    const files = fs.readdirSync(logsDir);
+    const logFiles = files.filter(file => file.endsWith('.log'));
+    
+    return { success: true, files: logFiles, count: logFiles.length };
+  } catch (error) {
+    console.error('获取日志文件列表失败:', error);
+    return { success: false, error: error.message, files: [] };
+  }
+};
+
+// 删除非当日的日志文件
+const cleanupOldLogs = () => {
+  try {
+    const projectRoot = path.join(__dirname, '..');
+    const logsDir = path.join(projectRoot, 'logs');
+    
+    if (!fs.existsSync(logsDir)) {
+      return { success: true, deleted: [], message: 'logs文件夹不存在' };
+    }
+    
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const files = fs.readdirSync(logsDir);
+    const logFiles = files.filter(file => file.endsWith('.log'));
+    
+    const deletedFiles = [];
+    
+    for (const file of logFiles) {
+      // 检查文件名是否包含日期（格式：xxx_YYYY-MM-DD.log）
+      const dateMatch = file.match(/(\d{4}-\d{2}-\d{2})/);
+      if (dateMatch) {
+        const fileDate = dateMatch[1];
+        if (fileDate !== today) {
+          const filePath = path.join(logsDir, file);
+          fs.unlinkSync(filePath);
+          deletedFiles.push(file);
+          console.log(`已删除非当日日志文件: ${file}`);
+        }
+      }
+    }
+    
+    return { 
+      success: true, 
+      deleted: deletedFiles, 
+      count: deletedFiles.length,
+      message: `检查了 ${logFiles.length} 个日志文件，删除了 ${deletedFiles.length} 个非当日日志` 
+    };
+  } catch (error) {
+    console.error('清理旧日志失败:', error);
+    return { success: false, error: error.message, deleted: [] };
+  }
+};
+
+// IPC 处理程序 - 获取日志文件列表
+ipcMain.handle('get-log-files', async () => {
+  return getLogFiles();
+});
+
+// IPC 处理程序 - 清理非当日日志
+ipcMain.handle('cleanup-old-logs', async () => {
+  return cleanupOldLogs();
+});
+
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {

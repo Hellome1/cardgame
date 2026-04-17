@@ -285,6 +285,32 @@ class Logger {
     await this.clearDiscardPileLogs();
   }
 
+  // 获取日志文件列表
+  async getLogFiles(): Promise<{ success: boolean; files: string[]; count?: number; message?: string; error?: string }> {
+    if (this.ipcRenderer) {
+      try {
+        return await this.ipcRenderer.invoke('get-log-files');
+      } catch (e) {
+        console.error('[Logger] 获取日志文件列表失败:', e);
+        return { success: false, files: [], error: String(e) };
+      }
+    }
+    return { success: false, files: [], message: '不在Electron环境中' };
+  }
+
+  // 清理非当日日志
+  async cleanupOldLogs(): Promise<{ success: boolean; deleted: string[]; count?: number; message?: string; error?: string }> {
+    if (this.ipcRenderer) {
+      try {
+        return await this.ipcRenderer.invoke('cleanup-old-logs');
+      } catch (e) {
+        console.error('[Logger] 清理旧日志失败:', e);
+        return { success: false, deleted: [], error: String(e) };
+      }
+    }
+    return { success: false, deleted: [], message: '不在Electron环境中' };
+  }
+
   // 以下方法保持向后兼容，用于直接记录到内存
   info(message: string): void {
     const logEntry = `[INFO] ${message}`;

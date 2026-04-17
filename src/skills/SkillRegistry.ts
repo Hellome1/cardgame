@@ -76,4 +76,12 @@ export class SkillRegistry {
     }
     return result;
   }
+
+  /**
+   * 清空所有已注册的技能
+   */
+  clear(): void {
+    this.skills.clear();
+    console.log('技能注册表已清空');
+  }
 }

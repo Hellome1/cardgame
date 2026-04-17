@@ -47,9 +47,8 @@ export const HandCards: React.FC<HandCardsProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(800);
-  const cardWidth = 100; // 单张牌宽度（与Card组件一致）
+  const cardWidth = 120; // 单张牌宽度（与Card组件一致）
   const defaultGap = 10; // 默认间隙（不堆叠）
-  const minVisibleWidth = 30; // 堆叠时最小可见宽度（保证能看到卡牌）
 
   // 动态获取容器宽度
   useEffect(() => {

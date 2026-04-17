@@ -498,6 +498,22 @@
   box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
 }
 
+.debug-btn {
+  padding: 12px 40px;
+  font-size: 20px;
+  background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.debug-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 15px rgba(33, 150, 243, 0.4);
+}
+
 .start-buttons {
   display: flex;
   flex-direction: column;

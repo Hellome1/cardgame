@@ -375,7 +375,7 @@ export class LuanWuSkill extends ActiveSkill {
     });
   }
 
-  protected checkCanUse(context: SkillContext): boolean {
+  protected checkCanUse(_context: SkillContext): boolean {
     // 限定技，整局游戏只能使用一次
     return !this.hasUsed;
   }

@@ -1,6 +1,6 @@
 .card {
-  width: 100px;
-  height: 140px;
+  width: 120px;
+  height: 168px;
   background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
   border: 2px solid #333;
   border-radius: 8px;
@@ -11,6 +11,7 @@
   flex-direction: column;
   position: relative;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-sizing: border-box; /* 确保width包含padding和border */
 }
 
 .card:hover {

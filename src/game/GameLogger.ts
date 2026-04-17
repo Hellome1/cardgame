@@ -71,7 +71,7 @@ export class GameLogger {
    * 记录动作日志
    */
   logAction(
-    action: GameAction,
+    _action: GameAction,
     player: Player,
     message: string,
     options?: {

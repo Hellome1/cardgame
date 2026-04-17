@@ -4,9 +4,11 @@ import {
   DuelState, SkillContext, SkillTrigger
 } from '../types/game';
 import { CardManager } from './CardManager';
+import { CardDealer } from './CardDealer';
 import { CharacterManager } from './CharacterManager';
 import { AIPlayer } from './AIPlayer';
 import { DistanceCalculator } from './DistanceCalculator';
+import { DebugConfig } from '../components/DebugSetup/DebugSetup';
 
 export class GameEngine {
   private state: GameState;
@@ -256,6 +258,94 @@ export class GameEngine {
     }
     this.state.phase = GamePhase.TURN_START;
     this.processTurn();
+  }
+
+  // 使用调试配置开始游戏
+  startDebugGame(config: DebugConfig): void {
+    console.log('GameEngine.startDebugGame 被调用', config);
+    if (!this.gameStartedFlag) {
+      console.log('使用调试配置初始化游戏');
+      this.state = this.initializeGameWithConfig(config);
+      this.gameStartedFlag = true;
+    }
+    this.state.phase = GamePhase.TURN_START;
+    this.processTurn();
+  }
+
+  // 使用调试配置初始化游戏
+  private initializeGameWithConfig(config: DebugConfig): GameState {
+    console.log('使用调试配置初始化游戏');
+    
+    // 重置技能注册状态
+    this.characterManager.resetSkillRegistration();
+
+    // 创建牌堆
+    const deck = this.cardManager.createStandardDeck();
+
+    // 创建发牌系统
+    const cardDealer = new CardDealer(deck);
+
+    // 根据配置创建玩家（先不发放手牌）
+    const players: Player[] = config.players.map((playerConfig, index) => {
+      const character = this.characterManager.getCharacter(playerConfig.characterId);
+      if (!character) {
+        throw new Error(`武将 ${playerConfig.characterId} 不存在`);
+      }
+
+      const isAI = index !== 0;
+
+      return {
+        id: `player_${index}`,
+        character: { ...character, hp: character.maxHp },
+        identity: playerConfig.identity,
+        handCards: [],
+        equipment: {},
+        delayedSpells: {},
+        isDead: false,
+        isAI,
+      };
+    });
+
+    // 构建初始手牌映射
+    const initialHandCardsMap = new Map<string, string[]>();
+    config.players.forEach((playerConfig, index) => {
+      if (playerConfig.initialHandCards && playerConfig.initialHandCards.length > 0) {
+        initialHandCardsMap.set(`player_${index}`, playerConfig.initialHandCards);
+      }
+    });
+
+    // 使用发牌系统发放初始手牌
+    cardDealer.dealInitialHandCardsToAll(players, initialHandCardsMap);
+
+    // 找到主公的索引
+    const lordIndex = players.findIndex(p => p.identity === Identity.LORD);
+    const startingPlayerIndex = lordIndex >= 0 ? lordIndex : 0;
+
+    // 根据场上武将注册技能
+    const characterIds = config.players.map(p => p.characterId);
+    this.characterManager.registerSkillsForCharacters(characterIds);
+
+    // 构建游戏状态（deck 已经被发牌系统修改）
+    const gameState: GameState = {
+      players,
+      deck,
+      discardPile: [],
+      currentPlayerIndex: startingPlayerIndex,
+      phase: GamePhase.GAME_START,
+      round: 1,
+    };
+
+    // 打印调试信息
+    console.log('\n========== 调试模式 - 游戏初始化完成 ==========');
+    console.log(`玩家数量: ${players.length}`);
+    players.forEach(player => {
+      const handCardsStr = player.handCards.map(c => `${c.name}[${c.suit}${c.number}]`).join(', ');
+      console.log(`${player.character.name} (${player.identity}): ${handCardsStr}`);
+    });
+    console.log(`牌堆剩余: ${deck.length} 张牌`);
+    console.log('==============================================\n');
+
+    return gameState;
   }
 
   // 处理回合
