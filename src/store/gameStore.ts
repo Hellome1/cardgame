@@ -59,6 +59,7 @@ interface GameStore {
   handleTimeout: () => void;  // 处理超时
   pauseGame: () => void;  // 暂停游戏
   resumeGame: () => void;  // 恢复游戏
+  executeSkill: (skillId: string, targetId?: string) => void;  // 执行技能
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -622,6 +623,62 @@ export const useGameStore = create<GameStore>((set, get) => ({
           get().startTimer(timeLimit);
         }
       }
+    }
+  },
+
+  // 执行技能
+  executeSkill: (skillId: string, targetId?: string) => {
+    const { engine, gameState, logs } = get();
+    if (!engine || !gameState) return;
+
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    const humanPlayer = gameState.players[0];
+
+    // 只能在自己的回合执行主动技能
+    if (currentPlayer.id !== humanPlayer.id) {
+      console.log('不是自己的回合，无法使用技能');
+      return;
+    }
+
+    // 找到技能
+    const skill = currentPlayer.character.skills.find(s => s.id === skillId);
+    if (!skill) {
+      console.log(`技能 ${skillId} 不存在`);
+      return;
+    }
+
+    // 检查是否是主动技能
+    if (skill.isPassive) {
+      console.log(`${skill.name} 是被动技能，无法主动使用`);
+      return;
+    }
+
+    // 构建技能上下文
+    const target = targetId ? gameState.players.find(p => p.id === targetId) : undefined;
+    const skillContext = {
+      player: currentPlayer,
+      game: gameState,
+      engine,
+      target,
+    };
+
+    // 执行技能
+    try {
+      skill.execute(skillContext);
+      console.log(`技能执行成功: ${skill.name}`);
+
+      // 强制创建新的游戏状态引用，确保React检测到变化
+      const newGameState = engine.getState();
+      const clonedState = JSON.parse(JSON.stringify(newGameState));
+
+      set({
+        gameState: clonedState,
+        logs: [`${currentPlayer.character.name} 使用【${skill.name}】`, ...logs].slice(0, 50),
+      });
+
+      console.log(`[executeSkill] 游戏状态已更新，${currentPlayer.character.name} 当前手牌数: ${clonedState.players[0].handCards.length}`);
+    } catch (error) {
+      console.error(`执行技能 ${skill.name} 时出错:`, error);
     }
   },
 }));

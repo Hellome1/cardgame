@@ -91,8 +91,12 @@ export const HandCards: React.FC<HandCardsProps> = ({
     // 所以 gap = (containerWidth - n * cardWidth) / (n - 1)
     const dynamicGap = (containerWidth - totalCards * cardWidth) / (totalCards - 1);
 
+    // 限制最小间隙，避免卡牌过度重叠
+    const minGap = -100; // 最大堆叠程度（负值表示重叠）
+    const clampedGap = Math.max(dynamicGap, minGap);
+
     return cards.map((_, index) => ({
-      offset: index * (cardWidth + dynamicGap),
+      offset: index * (cardWidth + clampedGap),
       isStacked: true, // 标记为堆叠状态
       zIndex: index,
     }));
@@ -110,7 +114,7 @@ export const HandCards: React.FC<HandCardsProps> = ({
   const isResponseTarget = pendingResponse && currentTurnId === humanPlayer.id;
 
   return (
-    <div className="hand-cards-container" ref={containerRef} style={{ width: '100%', maxWidth: containerWidth }}>
+    <div className="hand-cards-container" ref={containerRef}>
       {cards.map((card, index) => {
         const position = cardPositions[index];
         if (!position) return null;
@@ -161,8 +165,9 @@ export const HandCards: React.FC<HandCardsProps> = ({
             className={`hand-card-wrapper ${position.isStacked ? 'stacked' : ''} ${isSelected ? 'selected' : ''}`}
             style={{
               left: position.offset,
-              zIndex: isSelected ? 100 : position.zIndex,
+              zIndex: position.zIndex,
             }}
+            data-selected={isSelected}
           >
             <Card
               card={card}

@@ -221,17 +221,19 @@ export class KuRouSkill extends ActiveSkill {
 
     // 失去1点体力
     player.character.hp -= 1;
-    console.log(`${player.character.name} 【苦肉】失去1点体力`);
+    console.log(`${player.character.name} 【苦肉】失去1点体力，当前体力: ${player.character.hp}`);
 
     // 摸两张牌
     const drawResult = engine['cardManager'].draw(engine.getState().deck, 2);
     player.handCards.push(...drawResult.cards);
 
-    console.log(`${player.character.name} 【苦肉】摸两张牌`);
+    const drawnCardNames = drawResult.cards.map(c => `【${c.name}】[${c.suit}${c.number}]`).join('、');
+    console.log(`${player.character.name} 【苦肉】摸两张牌: ${drawnCardNames}`);
+    console.log(`${player.character.name} 当前手牌数: ${player.handCards.length}`);
 
     return {
       success: true,
-      message: `${player.character.name} 发动【苦肉】，失去1点体力并摸两张牌`,
+      message: `${player.character.name} 发动【苦肉】，失去1点体力并摸两张牌: ${drawnCardNames}`,
       drawnCards: drawResult.cards,
     };
   }

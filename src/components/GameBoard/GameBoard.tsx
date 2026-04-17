@@ -114,6 +114,7 @@ export const GameBoard: React.FC = () => {
     handleTimeout,
     pauseGame,
     resumeGame,
+    executeSkill,
   } = useGameStore();
 
   // 用于强制刷新UI的状态
@@ -319,7 +320,7 @@ export const GameBoard: React.FC = () => {
 
         // 计算所有目标的连线位置
         const positions: { start: { x: number, y: number }, end: { x: number, y: number } }[] = [];
-        
+
         for (const targetId of cardAnimation.targetPlayerIds) {
           const targetEl = playerRefs.current.get(targetId);
           if (targetEl) {
@@ -408,6 +409,15 @@ export const GameBoard: React.FC = () => {
     const engine = useGameStore.getState().engine;
     if (engine) {
       engine.startDebugGame(config);
+      // 获取游戏状态并更新 store
+      const gameState = engine.getState();
+      const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+      useGameStore.setState({
+        isGameStarted: true,
+        gameState,
+        logs: [`游戏开始！${currentPlayer.character.name} 的回合`],
+        attackCountThisTurn: 0,
+      });
     }
   };
 
@@ -957,6 +967,7 @@ export const GameBoard: React.FC = () => {
                 showIdentity={true}
                 isLord={lordPlayer?.id === humanPlayer.id}
                 setRef={setPlayerRef(humanPlayer.id)}
+                onSkillUse={executeSkill}
               />
             </div>
 
@@ -1038,24 +1049,6 @@ export const GameBoard: React.FC = () => {
                 isCardPlayable={isCardPlayable}
                 onCardClick={handleCardClick}
               />
-
-              {isHumanTurn && gameState.phase === GamePhase.PLAY && (
-                <div className="action-buttons">
-                  <button
-                    className="action-btn btn-play"
-                    onClick={handlePlayCard}
-                    disabled={!selectedCardId}
-                  >
-                    出牌
-                  </button>
-                  <button
-                    className="action-btn btn-end"
-                    onClick={endTurn}
-                  >
-                    结束回合
-                  </button>
-                </div>
-              )}
 
               {/* 响应阶段提示（被杀或锦囊牌时） - 死亡玩家不显示 */}
               {gameState.phase === GamePhase.RESPONSE && gameState.pendingResponse && !humanPlayer.isDead && (
@@ -1375,7 +1368,7 @@ export const GameBoard: React.FC = () => {
                     filter="url(#glow)"
                     className="card-animation-line"
                   />
-                  
+
                   {/* 箭头 - 计算角度指向目标 */}
                   {(() => {
                     const dx = pos.end.x - pos.start.x;

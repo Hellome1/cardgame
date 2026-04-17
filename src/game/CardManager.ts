@@ -1,5 +1,19 @@
 import { Card, CardType, CardSuit, CardColor, BasicCardName, SpellCardName, EquipmentType } from '../types/game';
 
+// 牌堆日志记录函数
+type DeckLogCallback = (reason: string, cards: Card[], changedCards?: Card[]) => void;
+let deckLogCallback: DeckLogCallback | null = null;
+
+export function setDeckLogCallback(callback: DeckLogCallback): void {
+  deckLogCallback = callback;
+}
+
+export function logDeckState(reason: string, cards: Card[], changedCards?: Card[]): void {
+  if (deckLogCallback) {
+    deckLogCallback(reason, cards, changedCards);
+  }
+}
+
 export class CardManager {
   private static instance: CardManager;
   private static cardIdCounter = 0;
@@ -24,9 +38,15 @@ export class CardManager {
   // 创建一副标准牌
   private deckCreateCount = 0;
 
-  createStandardDeck(): Card[] {
+  /**
+   * 创建标准牌堆
+   * @param silent 如果为true，则不记录日志（用于UI展示）
+   */
+  createStandardDeck(silent: boolean = false): Card[] {
     this.deckCreateCount++;
-    console.log(`创建标准牌堆... (第 ${this.deckCreateCount} 次)`);
+    if (!silent) {
+      console.log(`创建标准牌堆... (第 ${this.deckCreateCount} 次)`);
+    }
     // 注意：不再重置计数器，确保所有牌的ID都是全局唯一的
 
     const deck: Card[] = [];
@@ -272,7 +292,40 @@ export class CardManager {
       console.error('牌堆中有重复的装备牌:', duplicates);
     }
 
-    return this.shuffle(deck);
+    // 如果是静默模式，直接返回洗牌后的牌堆，不记录日志
+    if (silent) {
+      return this.shuffle(deck);
+    }
+
+    // 记录初始牌堆（创建后、洗牌前）
+    console.log(`[牌堆] 创建完成，共 ${deck.length} 张牌`);
+    console.log('[牌堆] 各类型数量统计:');
+    const basicCount = deck.filter(c => c.type === CardType.BASIC).length;
+    const spellCount = deck.filter(c => c.type === CardType.SPELL).length;
+    const equipCount = deck.filter(c => c.type === CardType.EQUIPMENT).length;
+    console.log(`  - 基本牌: ${basicCount} 张`);
+    console.log(`  - 锦囊牌: ${spellCount} 张`);
+    console.log(`  - 装备牌: ${equipCount} 张`);
+
+    // 记录完整的初始牌堆（洗牌前）
+    console.log('[牌堆] 初始牌堆内容（洗牌前，按创建顺序）:');
+    deck.forEach((card, index) => {
+      console.log(`  ${index + 1}. ${card.name} [${card.suit}${card.number}] (${card.type}) - ID: ${card.id}`);
+    });
+
+    const shuffledDeck = this.shuffle(deck);
+
+    // 记录洗牌后的牌堆
+    console.log('[牌堆] 洗牌完成');
+    console.log('[牌堆] 洗牌后牌堆内容（顶部到底部）:');
+    shuffledDeck.forEach((card, index) => {
+      console.log(`  ${index + 1}. ${card.name} [${card.suit}${card.number}] (${card.type}) - ID: ${card.id}`);
+    });
+
+    // 触发牌堆日志记录
+    logDeckState('牌堆创建完成-洗牌后', shuffledDeck);
+
+    return shuffledDeck;
   }
 
   // 洗牌
@@ -287,8 +340,10 @@ export class CardManager {
 
   // 抽牌
   draw(deck: Card[], count: number): { cards: Card[]; remaining: Card[] } {
-    const cards = deck.slice(0, count);
-    const remaining = deck.slice(count);
-    return { cards, remaining };
+    const actualCount = Math.min(count, deck.length);
+    const cards = deck.splice(0, actualCount);
+    console.log(`[CardManager] 从牌堆抽取 ${cards.length} 张牌: ${cards.map(c => c.name).join(', ')}`);
+    console.log(`[CardManager] 牌堆剩余 ${deck.length} 张牌`);
+    return { cards, remaining: deck };
   }
 }

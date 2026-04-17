@@ -3,7 +3,7 @@ import {
   ActionRequest, GameAction, Card, CardType, CardSuit, CardColor, BasicCardName, SpellCardName, ResponseType,
   DuelState, SkillContext, SkillTrigger
 } from '../types/game';
-import { CardManager } from './CardManager';
+import { CardManager, setDeckLogCallback, logDeckState } from './CardManager';
 import { CardDealer } from './CardDealer';
 import { CharacterManager } from './CharacterManager';
 import { AIPlayer } from './AIPlayer';
@@ -32,6 +32,24 @@ export class GameEngine {
     // 初始化空游戏状态，不创建牌堆和玩家
     this.state = this.createEmptyGameState();
     this.aiPlayer = new AIPlayer(this);
+
+    // 设置牌堆日志回调
+    this.setupDeckLogCallback();
+  }
+
+  // 设置牌堆日志回调
+  private setupDeckLogCallback(): void {
+    setDeckLogCallback((reason: string, cards: Card[], changedCards?: Card[]) => {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('deck-state-update', {
+          detail: {
+            reason,
+            cards,
+            changedCards
+          }
+        }));
+      }
+    });
   }
 
   // 记录牌堆状态到日志文件
@@ -275,7 +293,7 @@ export class GameEngine {
   // 使用调试配置初始化游戏
   private initializeGameWithConfig(config: DebugConfig): GameState {
     console.log('使用调试配置初始化游戏');
-    
+
     // 重置技能注册状态
     this.characterManager.resetSkillRegistration();
 
@@ -306,16 +324,20 @@ export class GameEngine {
       };
     });
 
-    // 构建初始手牌映射
-    const initialHandCardsMap = new Map<string, string[]>();
-    config.players.forEach((playerConfig, index) => {
-      if (playerConfig.initialHandCards && playerConfig.initialHandCards.length > 0) {
-        initialHandCardsMap.set(`player_${index}`, playerConfig.initialHandCards);
-      }
+    // 使用发牌系统发放初始手牌（统一使用CardDealer，避免直接操作deck）
+    players.forEach((player, index) => {
+      const playerConfig = config.players[index];
+      const cardNames = playerConfig.initialHandCardNames || [];
+
+      // 统一使用CardDealer处理所有发牌逻辑
+      const dealtCards = cardDealer.dealInitialHandCardsByName(player, cardNames);
+
+      // 记录发牌后的牌堆状态
+      logDeckState(`${player.character.name}手牌发放完成`, deck, dealtCards);
     });
 
-    // 使用发牌系统发放初始手牌
-    cardDealer.dealInitialHandCardsToAll(players, initialHandCardsMap);
+    // 记录所有玩家发牌完成后的最终牌堆状态
+    logDeckState('所有玩家初始手牌发放完成-最终牌堆', deck);
 
     // 找到主公的索引
     const lordIndex = players.findIndex(p => p.identity === Identity.LORD);

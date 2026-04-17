@@ -8,8 +8,6 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-sizing: border-box;
   overflow: visible;
-  display: flex;
-  align-items: center;
 }
 
 /* 所有手牌使用绝对定位，由计算的 offset 控制位置 */
@@ -18,26 +16,34 @@
   top: 50%;
   transform: translateY(-50%);
   left: 0;
-  transition: transform 0.2s ease, z-index 0s;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
 }
 
+/* 默认悬停效果 - 只提升 z-index，不移动 */
 .hand-card-wrapper:hover {
   z-index: 1000 !important;
-  transform: translateY(-15px) scale(1.05) !important;
 }
 
-.hand-card-wrapper.selected {
+/* 选中状态 - 高亮并向上位移（抽牌效果） */
+.hand-card-wrapper.selected,
+.hand-card-wrapper[data-selected="true"] {
   z-index: 100 !important;
+  transform: translateY(-70%) !important;
 }
 
-.hand-card-wrapper.selected .card {
-  box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+/* 选中状态的卡牌样式 */
+.hand-card-wrapper.selected .card,
+.hand-card-wrapper[data-selected="true"] .card {
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.8), 0 4px 12px rgba(0, 0, 0, 0.3);
   border-color: #ffd700;
+  border-width: 3px;
 }
 
-.hand-card-wrapper.stacked:hover {
-  transform: translateY(-15px) scale(1.08) !important;
+/* 堆叠状态的卡牌选中时位移更多 */
+.hand-card-wrapper.stacked.selected,
+.hand-card-wrapper.stacked[data-selected="true"] {
+  transform: translateY(-75%) !important;
 }
 
 /* 堆叠时的小号牌名 */
@@ -64,7 +70,7 @@
 }
 
 .hand-card-wrapper.disabled:hover {
-  transform: none;
+  transform: translateY(-50%);
 }
 
 .hand-card-wrapper.invalid {
@@ -73,5 +79,5 @@
 }
 
 .hand-card-wrapper.invalid:hover {
-  transform: none;
+  transform: translateY(-50%);
 }

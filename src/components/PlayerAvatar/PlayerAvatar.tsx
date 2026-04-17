@@ -13,6 +13,7 @@ interface PlayerAvatarProps {
   isUnselectable?: boolean;  // 当需要选择目标但不可选时（如距离不够）
   onClick?: () => void;
   setRef?: (el: HTMLElement | null) => void;
+  onSkillUse?: (skillId: string) => void;  // 使用技能的回调
 }
 
 export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
@@ -26,6 +27,7 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
   isUnselectable = false,
   onClick,
   setRef,
+  onSkillUse,
 }) => {
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
 
@@ -102,10 +104,18 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
   // 处理技能点击
   const handleSkillClick = (skillId: string, e: React.MouseEvent, isPassive: boolean) => {
     e.stopPropagation();
-    // 只有主动技能可以点击
+    // 只有主动技能可以点击执行
     if (!isPassive) {
-      setSelectedSkill(selectedSkill === skillId ? null : skillId);
+      // 直接执行技能
+      if (onSkillUse) {
+        onSkillUse(skillId);
+      }
     }
+  };
+
+  // 处理技能描述显示
+  const handleSkillHover = (skillId: string | null) => {
+    setSelectedSkill(skillId);
   };
 
   return (
@@ -115,8 +125,10 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
         {player.character.skills.map((skill) => (
           <div
             key={skill.id}
-            className={`skill-item-left ${skill.isPassive ? 'passive' : 'active'} ${selectedSkill === skill.id ? 'selected' : ''}`}
+            className={`skill-item-left ${skill.isPassive ? 'passive' : 'active'}`}
             onClick={(e) => handleSkillClick(skill.id, e, skill.isPassive)}
+            onMouseEnter={() => handleSkillHover(skill.id)}
+            onMouseLeave={() => handleSkillHover(null)}
           >
             <span className="skill-name-left">{skill.name}</span>
             {/* 技能详细描述弹窗 */}
