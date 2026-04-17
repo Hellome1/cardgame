@@ -1,4 +1,4 @@
-import { Character, Kingdom, Gender, SkillTrigger, SkillContext } from '../types/game';
+import { Character, Kingdom, Gender, SkillTrigger, SkillContext, SkillResult } from '../types/game';
 import { SkillManager } from './SkillManager';
 
 // 新版技能系统导入
@@ -172,8 +172,9 @@ export class CharacterManager {
           trigger: SkillTrigger.ON_DAMAGE,
           isPassive: false,
           skillClassName: 'jianxiong',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.jianxiong(context);
+            return { success: true, message: '【奸雄】技能触发' };
           },
         },
       ],
@@ -193,10 +194,30 @@ export class CharacterManager {
           name: '反馈',
           description: '当你受到伤害后，你可以获得伤害来源的一张牌。',
           trigger: SkillTrigger.ON_DAMAGE,
-          isPassive: false,
+          isPassive: true,
           skillClassName: 'fankui',
-          execute: (context: SkillContext) => {
-            SkillManager.fankui(context);
+          execute: (context: SkillContext): SkillResult => {
+            const { player, source } = context;
+
+            if (source && source.handCards.length > 0) {
+              // 随机获得伤害来源一张手牌
+              const randomIndex = Math.floor(Math.random() * source.handCards.length);
+              const stolenCard = source.handCards.splice(randomIndex, 1)[0];
+              player.handCards.push(stolenCard);
+
+              console.log(`${player.character.name} 【反馈】获得 ${source.character.name} 的 ${stolenCard.name}`);
+
+              return {
+                success: true,
+                message: `${player.character.name} 发动【反馈】，获得${source.character.name}的${stolenCard.name}`,
+                affectedTargets: [source],
+              };
+            }
+
+            return {
+              success: false,
+              message: '伤害来源没有手牌',
+            };
           },
         },
         {
@@ -204,7 +225,7 @@ export class CharacterManager {
           name: '鬼才',
           description: '当一名角色的判定牌生效前，你可以打出一张手牌代替之。',
           trigger: SkillTrigger.BEFORE_PLAY,
-          isPassive: false,
+          isPassive: true,
           skillClassName: 'guicai',
           execute: () => {
             // TODO: 实现判定牌替换逻辑
@@ -230,8 +251,9 @@ export class CharacterManager {
           trigger: SkillTrigger.ON_DAMAGE,
           isPassive: false,
           skillClassName: 'ganglie',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.ganglie(context);
+            return { success: true, message: '【刚烈】技能触发' };
           },
         },
       ],
@@ -253,8 +275,9 @@ export class CharacterManager {
           trigger: SkillTrigger.ON_DRAW,
           isPassive: false,
           skillClassName: 'tuxi',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.tuxi(context);
+            return { success: true, message: '【突袭】技能触发' };
           },
         },
       ],
@@ -277,8 +300,9 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           skillClassName: 'rende',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.rende(context);
+            return { success: true, message: '【仁德】技能触发' };
           },
         },
       ],
@@ -300,8 +324,9 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           skillClassName: 'wusheng',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.wusheng(context);
+            return { success: true, message: '【武圣】技能触发' };
           },
         },
       ],
@@ -346,8 +371,9 @@ export class CharacterManager {
           trigger: SkillTrigger.TURN_START,
           isPassive: false,
           skillClassName: 'guanxing',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.guanxing(context);
+            return { success: true, message: '【观星】技能触发' };
           },
         },
         {
@@ -380,8 +406,9 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           skillClassName: 'longdan',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.longdan(context);
+            return { success: true, message: '【龙胆】技能触发' };
           },
         },
       ],
@@ -403,8 +430,9 @@ export class CharacterManager {
           trigger: SkillTrigger.ON_ATTACKED,
           isPassive: false,
           skillClassName: 'tieji',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.tieji(context);
+            return { success: true, message: '【铁骑】技能触发' };
           },
         },
       ],
@@ -427,8 +455,9 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           skillClassName: 'zhiheng',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.zhiheng(context);
+            return { success: true, message: '【制衡】技能触发' };
           },
         },
       ],
@@ -450,8 +479,9 @@ export class CharacterManager {
           trigger: SkillTrigger.ON_DRAW,
           isPassive: true,
           skillClassName: 'yingzi',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.yingzi(context);
+            return { success: true, message: '【英姿】技能触发' };
           },
         },
         {
@@ -461,8 +491,9 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           skillClassName: 'fanjian',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.fanjian(context);
+            return { success: true, message: '【反间】技能触发' };
           },
         },
       ],
@@ -507,8 +538,9 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           skillClassName: 'kurou',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.kurou(context);
+            return { success: true, message: '【苦肉】技能触发' };
           },
         },
       ],
@@ -530,8 +562,9 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           skillClassName: 'guose',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.guose(context);
+            return { success: true, message: '【国色】技能触发' };
           },
         },
         {
@@ -541,8 +574,9 @@ export class CharacterManager {
           trigger: SkillTrigger.ON_ATTACKED,
           isPassive: false,
           skillClassName: 'liuli',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.liuli(context);
+            return { success: true, message: '【流离】技能触发' };
           },
         },
       ],
@@ -564,8 +598,9 @@ export class CharacterManager {
           trigger: SkillTrigger.ON_DISCARD,
           isPassive: false,
           skillClassName: 'xiaoji',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.xiaoji(context);
+            return { success: true, message: '【枭姬】技能触发' };
           },
         },
       ],
@@ -598,8 +633,9 @@ export class CharacterManager {
           trigger: SkillTrigger.ON_DISCARD,
           isPassive: false,
           skillClassName: 'lianying',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.lianying(context);
+            return { success: true, message: '【连营】技能触发' };
           },
         },
       ],
@@ -645,8 +681,9 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           skillClassName: 'jijiu',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.jijiu(context);
+            return { success: true, message: '【急救】技能触发' };
           },
         },
         {
@@ -656,8 +693,9 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           skillClassName: 'qingnang',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.qingnang(context);
+            return { success: true, message: '【青囊】技能触发' };
           },
         },
       ],
@@ -691,8 +729,9 @@ export class CharacterManager {
           trigger: SkillTrigger.TURN_END,
           isPassive: false,
           skillClassName: 'biyue',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.biyue(context);
+            return { success: true, message: '【闭月】技能触发' };
           },
         },
       ],
@@ -714,8 +753,9 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           skillClassName: 'luanji',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.luanji(context);
+            return { success: true, message: '【乱击】技能触发' };
           },
         },
       ],
@@ -737,8 +777,9 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           skillClassName: 'jiuchi',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.jiuchi(context);
+            return { success: true, message: '【酒池】技能触发' };
           },
         },
       ],
@@ -771,8 +812,9 @@ export class CharacterManager {
           trigger: SkillTrigger.PLAY,
           isPassive: false,
           skillClassName: 'luanwu',
-          execute: (context: SkillContext) => {
+          execute: (context: SkillContext): SkillResult => {
             SkillManager.luanwu(context);
+            return { success: true, message: '【乱武】技能触发' };
           },
         },
       ],

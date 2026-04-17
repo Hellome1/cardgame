@@ -4,7 +4,7 @@ import { Card } from '../Card/Card';
 import { PlayerAvatar } from '../PlayerAvatar/PlayerAvatar';
 import { HandCards } from '../HandCards/HandCards';
 import { DebugSetup, DebugConfig } from '../DebugSetup/DebugSetup';
-import { GamePhase, Identity, CardType, SpellCardName, BasicCardName, ResponseType, Card as GameCard } from '../../types/game';
+import { GamePhase, Identity, CardType, SpellCardName, BasicCardName, ResponseType, Card as GameCard, PendingResponse } from '../../types/game';
 import { DistanceCalculator } from '../../game/DistanceCalculator';
 import './GameBoard.css';
 
@@ -46,6 +46,8 @@ const getPhaseText = (phase: GamePhase): string => {
       return '弃牌阶段';
     case GamePhase.TURN_END:
       return '回合结束';
+    case GamePhase.DYING:
+      return '濒死阶段';
     case GamePhase.GAME_OVER:
       return '游戏结束';
     default:
@@ -54,7 +56,7 @@ const getPhaseText = (phase: GamePhase): string => {
 };
 
 // 检查卡牌是否是有效的响应牌
-const isValidResponseCard = (card: GameCard, responseType: ResponseType): boolean => {
+const isValidResponseCard = (card: GameCard, responseType: ResponseType, pendingResponse?: PendingResponse): boolean => {
   switch (responseType) {
     case ResponseType.DODGE:
       // 需要打出闪
@@ -68,6 +70,10 @@ const isValidResponseCard = (card: GameCard, responseType: ResponseType): boolea
     case ResponseType.NULLIFY:
       // 需要打出无懈可击
       return card.name === SpellCardName.NULLIFICATION;
+    case ResponseType.FIRE_ATTACK:
+      // 火攻响应：需要弃置与展示牌同花色的手牌
+      if (!pendingResponse?.fireAttackState) return false;
+      return card.suit === pendingResponse.fireAttackState.shownCard.suit;
     default:
       return false;
   }
@@ -115,6 +121,10 @@ export const GameBoard: React.FC = () => {
     pauseGame,
     resumeGame,
     executeSkill,
+    handleDyingResponse,
+    giveUpDying,
+    endGame,
+    resetGame,
   } = useGameStore();
 
   // 用于强制刷新UI的状态
@@ -144,6 +154,12 @@ export const GameBoard: React.FC = () => {
 
   // 响应阶段选择状态
   const [selectedResponseCard, setSelectedResponseCard] = useState<string | null>(null);
+
+  // 濒死阶段选择状态
+  const [selectedDyingCard, setSelectedDyingCard] = useState<string | null>(null);
+
+  // 技能提示状态
+  const [skillNotice, setSkillNotice] = useState<{ message: string; timestamp: number } | null>(null);
 
   // 调试模式状态
   const [showDebugSetup, setShowDebugSetup] = useState(false);
@@ -181,9 +197,11 @@ export const GameBoard: React.FC = () => {
     const isHumanTurn = !currentPlayer.isAI;
     const isResponsePhase = gameState.phase === GamePhase.RESPONSE;
     const isHumanResponse = isResponsePhase && gameState.pendingResponse?.request.targetPlayerId === humanPlayer.id;
+    const isDyingPhase = gameState.phase === GamePhase.DYING;
+    const isHumanDying = isDyingPhase && gameState.dyingState?.playerId === humanPlayer.id;
 
     // 只在需要玩家操作的阶段启动计时器
-    if ((isHumanTurn && (gameState.phase === GamePhase.PLAY || gameState.phase === GamePhase.DISCARD)) || isHumanResponse) {
+    if ((isHumanTurn && (gameState.phase === GamePhase.PLAY || gameState.phase === GamePhase.DISCARD)) || isHumanResponse || isHumanDying) {
       // 不同阶段不同时间限制
       let timeLimit = 15; // 出牌阶段15秒
       if (gameState.phase === GamePhase.DISCARD) {
@@ -192,6 +210,9 @@ export const GameBoard: React.FC = () => {
         // 无懈可击响应8秒，其他响应10秒
         const isNullifyResponse = gameState.pendingResponse?.request.responseType === ResponseType.NULLIFY;
         timeLimit = isNullifyResponse ? 8 : 10;
+      } else if (isDyingPhase) {
+        // 濒死阶段10秒
+        timeLimit = 10;
       }
 
       startTimer(timeLimit);
@@ -202,7 +223,23 @@ export const GameBoard: React.FC = () => {
     } else {
       stopTimer();
     }
-  }, [gameState?.phase, gameState?.currentPlayerIndex, gameState?.pendingResponse, isGameStarted]);
+  }, [gameState?.phase, gameState?.currentPlayerIndex, gameState?.pendingResponse, gameState?.dyingState, isGameStarted]);
+
+  // 濒死阶段计时器超时处理
+  useEffect(() => {
+    if (!isGameStarted || !gameState) return;
+
+    // 如果处于濒死阶段且计时器超时
+    if (gameState.phase === GamePhase.DYING && gameState.dyingState && timeLeft === 0 && isTimerRunning) {
+      const isHumanDying = gameState.dyingState.playerId === humanPlayer.id;
+      if (isHumanDying) {
+        console.log('濒死阶段超时，玩家未选择桃或酒自救');
+        // 清空选择，相当于取消
+        setSelectedDyingCard(null);
+        selectCard(null);
+      }
+    }
+  }, [timeLeft, isTimerRunning, gameState?.phase, gameState?.dyingState, isGameStarted]);
 
   // AI回合时定时刷新UI
   useEffect(() => {
@@ -293,6 +330,23 @@ export const GameBoard: React.FC = () => {
             }, 3000);
           }
         }
+      }
+
+      // 处理技能动作（如司马懿的反馈）
+      if (action.action === 'use_skill' && action.logMessage) {
+        // 在中间提示区显示技能效果
+        setSkillNotice({ message: action.logMessage, timestamp: Date.now() });
+
+        // 3秒后清除提示
+        setTimeout(() => {
+          setSkillNotice(prev => {
+            // 只清除当前显示的提示，如果已经被新的提示替换则不清除
+            if (prev && prev.message === action.logMessage) {
+              return null;
+            }
+            return prev;
+          });
+        }, 3000);
       }
     };
 
@@ -406,7 +460,15 @@ export const GameBoard: React.FC = () => {
   // 处理调试模式开始
   const handleDebugStart = (config: DebugConfig) => {
     setShowDebugSetup(false);
-    const engine = useGameStore.getState().engine;
+    let engine = useGameStore.getState().engine;
+
+    // 如果 engine 为 null（游戏结束后），需要先初始化
+    if (!engine) {
+      console.log('引擎为null，先初始化游戏');
+      initGame(4, true);
+      engine = useGameStore.getState().engine;
+    }
+
     if (engine) {
       engine.startDebugGame(config);
       // 获取游戏状态并更新 store
@@ -418,30 +480,35 @@ export const GameBoard: React.FC = () => {
         logs: [`游戏开始！${currentPlayer.character.name} 的回合`],
         attackCountThisTurn: 0,
       });
+    } else {
+      console.error('无法初始化游戏引擎');
     }
   };
 
+  // 游戏未开始时显示主界面或调试界面
   if (!isGameStarted) {
+    // 如果应该显示调试界面，直接显示调试界面
+    if (showDebugSetup) {
+      return (
+        <DebugSetup
+          onStartDebug={handleDebugStart}
+          onCancel={() => setShowDebugSetup(false)}
+        />
+      );
+    }
+
     return (
-      <>
-        <div className="start-screen">
-          <h1 className="start-title">三国卡牌</h1>
-          <div className="start-buttons">
-            <button className="start-btn" onClick={() => startGame(4)}>
-              开始游戏
-            </button>
-            <button className="debug-btn" onClick={() => setShowDebugSetup(true)}>
-              调试模式
-            </button>
-          </div>
+      <div className="start-screen">
+        <h1 className="start-title">三国卡牌</h1>
+        <div className="start-buttons">
+          <button className="start-btn" onClick={() => startGame(4)}>
+            开始游戏
+          </button>
+          <button className="debug-btn" onClick={() => setShowDebugSetup(true)}>
+            调试模式
+          </button>
         </div>
-        {showDebugSetup && (
-          <DebugSetup
-            onStartDebug={handleDebugStart}
-            onCancel={() => setShowDebugSetup(false)}
-          />
-        )}
-      </>
+      </div>
     );
   }
 
@@ -456,6 +523,20 @@ export const GameBoard: React.FC = () => {
   const lordPlayer = gameState.players.find(p => p.identity === Identity.LORD);
 
   const handleCardClick = (cardId: string) => {
+    // 濒死阶段（选择桃或酒）
+    if (gameState.phase === GamePhase.DYING && gameState.dyingState) {
+      if (gameState.dyingState.playerId === humanPlayer.id) {
+        const card = humanPlayer.handCards.find(c => c.id === cardId);
+        if (!card) return;
+
+        // 只能选择桃或酒
+        if (card.name === BasicCardName.PEACH || card.name === BasicCardName.WINE) {
+          setSelectedDyingCard(prev => prev === cardId ? null : cardId);
+        }
+      }
+      return;
+    }
+
     // 响应阶段（选择响应牌）
     if (gameState.phase === GamePhase.RESPONSE) {
       const pendingResponse = gameState.pendingResponse;
@@ -472,7 +553,7 @@ export const GameBoard: React.FC = () => {
 
           // 使用辅助函数检查卡牌是否是有效的响应牌
           const responseType = pendingResponse.request.responseType;
-          if (responseType && isValidResponseCard(card, responseType)) {
+          if (responseType && isValidResponseCard(card, responseType, pendingResponse)) {
             setSelectedResponseCard(prev => prev === cardId ? null : cardId);
           }
         }
@@ -697,8 +778,30 @@ export const GameBoard: React.FC = () => {
     return true;
   };
 
+  // 处理点击游戏板其他区域放下手牌
+  const handleBoardClick = (e: React.MouseEvent) => {
+    // 检查点击目标是否是游戏板本身或者是game-content（即不是手牌、按钮等交互元素）
+    const target = e.target as HTMLElement;
+    const isHandCard = target.closest('.hand-card-wrapper') !== null;
+    const isCard = target.closest('.card') !== null;
+    const isButton = target.closest('button') !== null;
+    const isPlayerAvatar = target.closest('.player-avatar') !== null;
+    const isSkillItem = target.closest('.skill-item-left') !== null;
+    const isModal = target.closest('.deck-modal-overlay') !== null;
+
+    // 如果点击的是手牌、按钮、玩家头像、技能或弹窗，不处理
+    if (isHandCard || isCard || isButton || isPlayerAvatar || isSkillItem || isModal) {
+      return;
+    }
+
+    // 如果在出牌阶段且有选中的手牌，取消选择
+    if (gameState.phase === GamePhase.PLAY && selectedCardId) {
+      selectCard(null);
+    }
+  };
+
   return (
-    <div className="game-board">
+    <div className="game-board" onClick={handleBoardClick}>
       <div
         className="game-content"
         ref={gameContentRef}
@@ -955,6 +1058,16 @@ export const GameBoard: React.FC = () => {
             </div>
           )}
 
+          {/* 技能提示面板 - 显示技能效果（如司马懿反馈） */}
+          {skillNotice && (
+            <div className="skill-notice-panel">
+              <div className="skill-notice-content">
+                <span className="skill-notice-icon">✨</span>
+                <span className="skill-notice-text">{skillNotice.message}</span>
+              </div>
+            </div>
+          )}
+
           {/* 自己区域 */}
           <div className="self-area">
             <div className="player-avatar-section">
@@ -968,6 +1081,7 @@ export const GameBoard: React.FC = () => {
                 isLord={lordPlayer?.id === humanPlayer.id}
                 setRef={setPlayerRef(humanPlayer.id)}
                 onSkillUse={executeSkill}
+                gamePhase={gameState.phase}
               />
             </div>
 
@@ -1044,6 +1158,7 @@ export const GameBoard: React.FC = () => {
                 selectedCardId={selectedCardId}
                 selectedDiscardCards={selectedDiscardCards}
                 selectedResponseCard={selectedResponseCard}
+                selectedDyingCard={selectedDyingCard}
                 discardInfo={discardInfo}
                 pendingResponse={gameState.pendingResponse}
                 isCardPlayable={isCardPlayable}
@@ -1095,6 +1210,86 @@ export const GameBoard: React.FC = () => {
                         </div>
                       </>
                     )
+                  ) : gameState.pendingResponse.request.responseType === ResponseType.FIRE_ATTACK ? (
+                    // 火攻响应阶段（弃置同花色牌造成火焰伤害）
+                    <>
+                      {gameState.pendingResponse.fireAttackState?.noSameSuit ? (
+                        // 没有同花色手牌的提示状态
+                        <>
+                          {gameState.pendingResponse.request.targetPlayerId === humanPlayer.id ? (
+                            // 当前玩家是火攻使用者，显示没有同花色手牌的提示
+                            <>
+                              <div className="response-info">
+                                {gameState.players.find(p => p.id === gameState.pendingResponse?.fireAttackState?.targetId)?.character.name} 展示了
+                                【{gameState.pendingResponse.fireAttackState?.shownCard.suit}{gameState.pendingResponse.fireAttackState?.shownCard.number} {gameState.pendingResponse.fireAttackState?.shownCard.name}】
+                              </div>
+                              <div className="response-hint fire-attack-no-suit">
+                                你没有 {gameState.pendingResponse.fireAttackState?.shownCard.suit} 花色的手牌，无法造成伤害
+                              </div>
+                              <div className="response-buttons">
+                                <button
+                                  className="action-btn btn-cancel"
+                                  onClick={() => {
+                                    respondToAttack();
+                                  }}
+                                >
+                                  确定
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            // 等待火攻使用者确认
+                            <div className="response-waiting">
+                              等待 {gameState.players.find(p => p.id === gameState.pendingResponse?.request.targetPlayerId)?.character.name} 确认...
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        // 正常火攻响应流程
+                        <>
+                          {gameState.pendingResponse.request.targetPlayerId === humanPlayer.id ? (
+                            // 当前玩家是火攻使用者，需要选择是否弃置同花色牌
+                            <>
+                              <div className="response-info">
+                                {gameState.players.find(p => p.id === gameState.pendingResponse?.fireAttackState?.targetId)?.character.name} 展示了
+                                【{gameState.pendingResponse.fireAttackState?.shownCard.suit}{gameState.pendingResponse.fireAttackState?.shownCard.number} {gameState.pendingResponse.fireAttackState?.shownCard.name}】
+                              </div>
+                              <div className="response-hint">
+                                请弃置一张 {gameState.pendingResponse.fireAttackState?.shownCard.suit} 花色的手牌造成1点火焰伤害，或点击取消结束火攻
+                              </div>
+                              <div className="response-buttons">
+                                <button
+                                  className="action-btn btn-confirm"
+                                  onClick={() => {
+                                    if (selectedResponseCard) {
+                                      respondToAttack(selectedResponseCard);
+                                      setSelectedResponseCard(null);
+                                    }
+                                  }}
+                                  disabled={!selectedResponseCard}
+                                >
+                                  确定
+                                </button>
+                                <button
+                                  className="action-btn btn-cancel"
+                                  onClick={() => {
+                                    setSelectedResponseCard(null);
+                                    respondToAttack();
+                                  }}
+                                >
+                                  取消
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            // 等待火攻使用者响应
+                            <div className="response-waiting">
+                              等待 {gameState.players.find(p => p.id === gameState.pendingResponse?.request.targetPlayerId)?.character.name} 选择是否弃牌...
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
                   ) : gameState.pendingResponse.request.responseType === ResponseType.DUEL ? (
                     // 决斗响应阶段（双方轮流出杀）
                     <>
@@ -1108,35 +1303,35 @@ export const GameBoard: React.FC = () => {
                             {gameState.pendingResponse.duelState?.round === 1 && gameState.pendingResponse.duelState?.targetId === humanPlayer.id
                               ? ' 向你发起【决斗】'
                               : ' 与你【决斗】中'}
+                            <span className="duel-round">
+                              （第 {gameState.pendingResponse.duelState?.round} 轮）
+                            </span>
                           </div>
                           <div className="response-hint">
-                            请打出一张【杀】进行响应，否则受到1点伤害
+                            {humanPlayer.handCards.some(c => c.name === BasicCardName.ATTACK || c.name === BasicCardName.THUNDER_ATTACK || c.name === BasicCardName.FIRE_ATTACK_CARD)
+                              ? '请选择一张【杀】进行响应，或点击"不响应"受到1点伤害'
+                              : '你没有【杀】，无法响应，将受到1点伤害'}
                           </div>
                           <div className="response-buttons">
                             <button
                               className="action-btn btn-response"
                               onClick={() => {
-                                // 查找手牌中的杀（包括普通杀、雷杀、火杀）
-                                const attackCard = humanPlayer.handCards.find(
-                                  c => c.name === BasicCardName.ATTACK ||
-                                    c.name === BasicCardName.THUNDER_ATTACK ||
-                                    c.name === BasicCardName.FIRE_ATTACK_CARD
-                                );
-                                if (attackCard) {
-                                  respondToAttack(attackCard.id);
+                                // 使用已选择的响应牌
+                                if (selectedResponseCard) {
+                                  respondToAttack(selectedResponseCard);
+                                  setSelectedResponseCard(null);
                                 }
                               }}
-                              disabled={!humanPlayer.handCards.some(
-                                c => c.name === BasicCardName.ATTACK ||
-                                  c.name === BasicCardName.THUNDER_ATTACK ||
-                                  c.name === BasicCardName.FIRE_ATTACK_CARD
-                              )}
+                              disabled={!selectedResponseCard}
                             >
-                              打出杀
+                              确定打出
                             </button>
                             <button
                               className="action-btn btn-no-response"
-                              onClick={() => respondToAttack()}
+                              onClick={() => {
+                                setSelectedResponseCard(null);
+                                respondToAttack();
+                              }}
                             >
                               不响应（受到1点伤害）
                             </button>
@@ -1146,6 +1341,9 @@ export const GameBoard: React.FC = () => {
                         // 等待对方出杀
                         <div className="response-waiting">
                           等待 {gameState.players.find(p => p.id === gameState.pendingResponse?.duelState?.currentTurnId)?.character.name} 响应【决斗】...
+                          <span className="duel-round-waiting">
+                            （第 {gameState.pendingResponse.duelState?.round} 轮）
+                          </span>
                         </div>
                       )}
                     </>
@@ -1301,6 +1499,57 @@ export const GameBoard: React.FC = () => {
                   )}
                 </div>
               )}
+
+              {/* 濒死阶段提示 - 体力降至0时需要使用桃或酒自救 */}
+              {gameState.phase === GamePhase.DYING && gameState.dyingState && (
+                <div className="dying-simple-panel">
+                  {gameState.dyingState.playerId === humanPlayer.id ? (
+                    // 当前玩家濒死，需要自救
+                    <>
+                      <div className="dying-simple-text">
+                        已进入濒死状态，需要一个【桃】或【酒】来自救
+                      </div>
+                      <div className="dying-simple-buttons">
+                        <button
+                          className="dying-btn dying-btn-confirm"
+                          onClick={() => {
+                            if (selectedDyingCard) {
+                              const card = humanPlayer.handCards.find(c => c.id === selectedDyingCard);
+                              if (card) {
+                                if (card.name === BasicCardName.PEACH) {
+                                  handleDyingResponse('peach');
+                                } else if (card.name === BasicCardName.WINE) {
+                                  handleDyingResponse('wine');
+                                }
+                                setSelectedDyingCard(null);
+                              }
+                            }
+                          }}
+                          disabled={!selectedDyingCard}
+                        >
+                          确定
+                        </button>
+                        <button
+                          className="dying-btn dying-btn-cancel"
+                          onClick={() => {
+                            // 放弃自救，角色死亡
+                            giveUpDying();
+                            setSelectedDyingCard(null);
+                            selectCard(null);
+                          }}
+                        >
+                          取消
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    // 等待其他玩家濒死自救
+                    <div className="dying-simple-text">
+                      等待 {gameState.players.find(p => p.id === gameState.dyingState?.playerId)?.character.name} 进行濒死自救...
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1320,6 +1569,23 @@ export const GameBoard: React.FC = () => {
           <div className="game-over">
             <div className="game-over-title">游戏结束</div>
             <div className="game-over-winner">{getWinnerText(gameState.winner)}</div>
+            <div className="game-over-menu">
+              <button
+                className="game-over-btn game-over-btn-primary"
+                onClick={() => endGame()}
+              >
+                回到主界面
+              </button>
+              <button
+                className="game-over-btn game-over-btn-secondary"
+                onClick={() => {
+                  endGame();
+                  setShowDebugSetup(true);
+                }}
+              >
+                调试模式重新开始
+              </button>
+            </div>
           </div>
         )}
 

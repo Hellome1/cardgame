@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Player, Identity, SpellCardName } from '../../types/game';
+import { Player, Identity, SpellCardName, GamePhase } from '../../types/game';
 import './PlayerAvatar.css';
 
 interface PlayerAvatarProps {
@@ -14,6 +14,7 @@ interface PlayerAvatarProps {
   onClick?: () => void;
   setRef?: (el: HTMLElement | null) => void;
   onSkillUse?: (skillId: string) => void;  // 使用技能的回调
+  gamePhase?: GamePhase;  // 当前游戏阶段
 }
 
 export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
@@ -28,8 +29,10 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
   onClick,
   setRef,
   onSkillUse,
+  gamePhase,
 }) => {
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
+  const [showSkillDetail, setShowSkillDetail] = useState(false);
 
   const getIdentityText = (identity: Identity) => {
     switch (identity) {
@@ -106,9 +109,13 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
     e.stopPropagation();
     // 只有主动技能可以点击执行
     if (!isPassive) {
-      // 直接执行技能
-      if (onSkillUse) {
-        onSkillUse(skillId);
+      // 只有在出牌阶段才能使用主动技能
+      if (gamePhase === GamePhase.PLAY) {
+        if (onSkillUse) {
+          onSkillUse(skillId);
+        }
+      } else {
+        console.log('只能在出牌阶段使用主动技能');
       }
     }
   };
@@ -116,6 +123,17 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
   // 处理技能描述显示
   const handleSkillHover = (skillId: string | null) => {
     setSelectedSkill(skillId);
+  };
+
+  // 处理双击武将牌显示技能详情
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowSkillDetail(true);
+  };
+
+  // 关闭技能详情弹窗
+  const handleCloseSkillDetail = () => {
+    setShowSkillDetail(false);
   };
 
   return (
@@ -146,6 +164,7 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
         ref={setRef}
         className={`player-avatar${isCurrentTurn ? ' current-turn' : ''}${isSelected ? ' selected' : ''}${player.isDead ? ' dead' : ''}${isHuman ? ' human' : ''}${isSelectable ? ' selectable' : ''}${isUnselectable ? ' unselectable' : ''}`}
         onClick={onClick}
+        onDoubleClick={handleDoubleClick}
       >
         {/* 判定区 - 上方小图标 */}
         <div className="delayed-spells-area">
@@ -245,6 +264,38 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 技能详情弹窗 - 双击武将牌显示 */}
+      {showSkillDetail && (
+        <div className="skill-detail-modal-overlay" onClick={handleCloseSkillDetail}>
+          <div className="skill-detail-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="skill-detail-header">
+              <h3 className="skill-detail-character-name">{player.character.name}</h3>
+              <button className="skill-detail-close-btn" onClick={handleCloseSkillDetail}>✕</button>
+            </div>
+            <div className="skill-detail-body">
+              <div className="skill-detail-section">
+                <h4 className="skill-detail-section-title">武将技能</h4>
+                {player.character.skills.length > 0 ? (
+                  <div className="skill-detail-list">
+                    {player.character.skills.map((skill) => (
+                      <div key={skill.id} className={`skill-detail-item ${skill.isPassive ? 'passive' : 'active'}`}>
+                        <div className="skill-detail-name">
+                          {skill.name}
+                          <span className="skill-detail-type">{skill.isPassive ? '【被动】' : '【主动】'}</span>
+                        </div>
+                        <div className="skill-detail-description">{skill.description}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="skill-detail-empty">该武将没有技能</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -43,9 +43,14 @@ export class SkillManager {
    */
   private executeSkill(skill: Skill, context: SkillContext): void {
     console.log(`触发技能: ${skill.name} (${context.player.character.name})`);
-    
+
     try {
-      skill.execute(context);
+      const result = skill.execute(context);
+
+      // 如果技能执行成功且有消息，输出到控制台
+      if (result.success && result.message) {
+        console.log(`[技能效果] ${result.message}`);
+      }
     } catch (error) {
       console.error(`技能执行失败: ${skill.name}`, error);
     }
@@ -69,6 +74,73 @@ export class SkillManager {
     return player.character.skills.filter(skill => skill.trigger === trigger);
   }
 
+  // ==================== 类型安全的技能执行方法 ====================
+
+  /**
+   * 技能执行函数映射表
+   */
+  private static skillExecutors: Map<string, (context: SkillContext) => void> = new Map([
+    ['yingzi', SkillManager.yingzi],
+    ['paoxiao', SkillManager.paoxiao],
+    ['kurou', SkillManager.kurou],
+    ['jianxiong', SkillManager.jianxiong],
+    ['fankui', SkillManager.fankui],
+    ['wushuang', SkillManager.wushuang],
+    ['rende', SkillManager.rende],
+    ['guanxing', SkillManager.guanxing],
+    ['kongcheng', SkillManager.kongcheng],
+    ['longdan', SkillManager.longdan],
+    ['tieji', SkillManager.tieji],
+    ['zhiheng', SkillManager.zhiheng],
+    ['fanjian', SkillManager.fanjian],
+    ['keji', SkillManager.keji],
+    ['guose', SkillManager.guose],
+    ['liuli', SkillManager.liuli],
+    ['xiaoji', SkillManager.xiaoji],
+    ['qianxun', SkillManager.qianxun],
+    ['lianying', SkillManager.lianying],
+    ['jijiu', SkillManager.jijiu],
+    ['qingnang', SkillManager.qingnang],
+    ['lijian', SkillManager.lijian],
+    ['biyue', SkillManager.biyue],
+    ['luanji', SkillManager.luanji],
+    ['jiuchi', SkillManager.jiuchi],
+    ['wansha', SkillManager.wansha],
+    ['luanwu', SkillManager.luanwu],
+    ['tuxi', SkillManager.tuxi],
+    ['ganglie', SkillManager.ganglie],
+  ]);
+
+  /**
+   * 类型安全地执行技能
+   * @param skillId 技能ID
+   * @param context 技能上下文
+   * @returns 是否执行成功
+   */
+  static executeSkillById(skillId: string, context: SkillContext): boolean {
+    const executor = SkillManager.skillExecutors.get(skillId);
+    if (executor) {
+      try {
+        executor(context);
+        return true;
+      } catch (error) {
+        console.error(`执行技能 ${skillId} 时出错:`, error);
+        return false;
+      }
+    }
+    console.error(`未找到技能执行器: ${skillId}`);
+    return false;
+  }
+
+  /**
+   * 检查技能是否存在
+   * @param skillId 技能ID
+   * @returns 是否存在
+   */
+  static hasSkillExecutor(skillId: string): boolean {
+    return SkillManager.skillExecutors.has(skillId);
+  }
+
   // ==================== 具体技能实现 ====================
 
   /**
@@ -90,7 +162,8 @@ export class SkillManager {
   }
 
   /**
-   * 黄盖 - 苦肉：失去1点体力，摸两张牌
+   * 黄盖 - 苦肉：失去1点体力，然后摸两张牌
+   * 注意：如果失去体力后进入濒死状态，需要先进行濒死判定，救活后才能摸牌
    */
   static kurou(context: SkillContext): void {
     const { player, engine } = context;
@@ -100,7 +173,15 @@ export class SkillManager {
     player.character.hp -= 1;
     console.log(`${player.character.name} 【苦肉】失去1点体力，当前体力: ${player.character.hp}`);
 
-    // 摸两张牌
+    // 如果体力降至0或以下，进入濒死阶段（摸牌延迟到濒死判定后）
+    if (player.character.hp <= 0) {
+      console.log(`${player.character.name} 体力降至0，进入濒死阶段，濒死判定通过后才能摸牌`);
+      // 触发濒死阶段，传入延迟摸牌数2张
+      engine.enterDyingPhase(player.id, 2);
+      return;
+    }
+
+    // 体力未降至0，直接摸两张牌
     const drawResult = engine['cardManager'].draw(engine.getState().deck, 2);
     player.handCards.push(...drawResult.cards);
 

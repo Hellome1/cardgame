@@ -26,6 +26,7 @@ export enum BasicCardName {
   FIRE_ATTACK_CARD = '火杀',
   DODGE = '闪',
   PEACH = '桃',
+  WINE = '酒',
 }
 
 // 锦囊牌名称
@@ -104,6 +105,15 @@ export enum SkillTrigger {
   ON_DEATH = 'on_death',
 }
 
+// 技能执行结果
+export interface SkillResult {
+  success: boolean;
+  message?: string;
+  affectedTargets?: Player[];
+  drawnCards?: Card[];
+  discardedCards?: Card[];
+}
+
 // 技能接口（兼容旧版和新版技能系统）
 export interface Skill {
   id: string;
@@ -112,7 +122,7 @@ export interface Skill {
   trigger: SkillTrigger;
   isPassive: boolean;
   useLimit?: number;
-  execute: (context: SkillContext) => void;
+  execute: (context: SkillContext) => SkillResult;
   // 新版技能系统字段
   skillClassName?: string;  // 对应新版技能类的名称
 }
@@ -123,6 +133,10 @@ export interface SkillContext {
   target?: Player;
   card?: Card;
   game: GameState;
+  engine?: unknown;
+  source?: Player;
+  damage?: number;
+  damageType?: 'normal' | 'fire' | 'thunder';
 }
 
 // 角色接口
@@ -171,6 +185,7 @@ export enum GamePhase {
   RESPONSE = 'response',  // 响应阶段（如打出闪响应杀）
   DISCARD = 'discard',
   TURN_END = 'turn_end',
+  DYING = 'dying',        // 濒死阶段（体力降至0时进入）
   GAME_OVER = 'game_over',
 }
 
@@ -217,6 +232,7 @@ export interface FireAttackState {
   sourceId: string;            // 火攻使用者ID
   targetId: string;            // 火攻目标ID
   shownCard: Card;             // 目标展示的手牌
+  noSameSuit?: boolean;        // 是否没有同花色手牌（用于提示）
 }
 
 // 待处理的响应
@@ -235,6 +251,15 @@ export interface PendingResponse {
   fireAttackState?: FireAttackState;  // 火攻状态
 }
 
+// 濒死状态
+export interface DyingState {
+  playerId: string;           // 濒死玩家ID
+  neededPeaches: number;      // 需要的桃数量（通常为1）
+  currentPeaches: number;     // 已使用的桃数量
+  canUseWine: boolean;        // 是否可以使用酒（黄盖苦肉时可以使用酒自救）
+  pendingDraw?: number;       // 濒死判定通过后需要摸的牌数（苦肉技能用）
+}
+
 // 游戏状态
 export interface GameState {
   players: Player[];
@@ -245,6 +270,7 @@ export interface GameState {
   round: number;
   winner?: Identity;
   pendingResponse?: PendingResponse;  // 待处理的响应
+  dyingState?: DyingState;            // 濒死状态
 }
 
 // 游戏动作

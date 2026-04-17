@@ -1010,9 +1010,10 @@ export class GameEngine {
 
         console.log(`${fireTarget.character.name} 展示了手牌 [${shownCard.suit}${shownCard.number} ${shownCard.name}]`);
 
-        // 检查使用者是否有同花色的手牌（除了刚使用的火攻）
+        // 检查使用者是否有同花色的手牌
+        // 注意：此时火攻牌已经被从手牌中移除（在 playCard 中），所以不需要排除
         const sameSuitCards = player.handCards.filter(c =>
-          c.suit === shownCard.suit && c.id !== card.id
+          c.suit === shownCard.suit
         );
 
         if (sameSuitCards.length === 0) {
@@ -1028,6 +1029,34 @@ export class GameEngine {
             logMessage: `${player.character.name} 对 ${fireTarget.character.name} 使用了【火攻】，${fireTarget.character.name} 展示了 [${shownCard.suit}${shownCard.number} ${shownCard.name}]，但 ${player.character.name} 没有同花色手牌`,
             isEffectResult: true,
           }));
+
+          // 进入火攻提示阶段，显示没有同花色手牌的提示
+          this.state.phase = GamePhase.RESPONSE;
+          this.state.pendingResponse = {
+            request: {
+              targetPlayerId: player.id,
+              sourcePlayerId: fireTarget.id,
+              cardName: '火攻',
+              responseCardName: '无同花色手牌',
+              damage: 0,
+              responseType: ResponseType.FIRE_ATTACK,
+            },
+            resolved: false,
+            result: false,
+            fireAttackState: {
+              sourceId: player.id,
+              targetId: fireTarget.id,
+              shownCard: shownCard,
+              noSameSuit: true, // 标记没有同花色手牌
+            },
+          };
+
+          // 如果是AI使用，自动结束火攻
+          if (player.isAI) {
+            setTimeout(() => {
+              this.resolveFireAttackNoDamage();
+            }, 1500);
+          }
 
           return true; // 火攻仍然算使用成功，只是没有伤害
         }
@@ -1545,6 +1574,206 @@ export class GameEngine {
     return true;
   }
 
+  // 进入濒死阶段
+  enterDyingPhase(playerId: string, pendingDraw?: number): void {
+    const player = this.state.players.find(p => p.id === playerId);
+    if (!player || player.isDead) return;
+
+    console.log(`${player.character.name} 进入濒死阶段，需要使用【桃】或【酒】自救`);
+
+    // 设置濒死状态
+    this.state.dyingState = {
+      playerId: playerId,
+      neededPeaches: 1,      // 需要1个桃
+      currentPeaches: 0,     // 已使用0个
+      canUseWine: true,      // 可以使用酒自救
+      pendingDraw: pendingDraw, // 濒死判定通过后需要摸的牌数（苦肉技能用）
+    };
+
+    // 切换到濒死阶段
+    this.state.phase = GamePhase.DYING;
+
+    // 通知UI更新
+    this.actionListeners.forEach(listener => listener({
+      action: GameAction.PLAY_CARD,
+      playerId: player.id,
+      cardId: '',
+      cardName: '濒死',
+      targetIds: [player.id],
+      isResponse: false,
+      logMessage: `${player.character.name} 进入濒死阶段，需要使用【桃】或【酒】自救`,
+    }));
+
+    // 如果是AI玩家，自动使用桃或酒
+    if (player.isAI) {
+      this.handleAIDyingResponse(player);
+    }
+  }
+
+  // 查找指定类型的卡牌索引（辅助函数）
+  private findCardIndexByType(cards: Card[], cardType: 'peach' | 'wine'): number {
+    return cards.findIndex(c =>
+      c.name === (cardType === 'peach' ? BasicCardName.PEACH : BasicCardName.WINE)
+    );
+  }
+
+  // 检查是否包含指定类型的卡牌（辅助函数）
+  private hasCardOfType(cards: Card[], cardType: 'peach' | 'wine'): boolean {
+    return cards.some(c =>
+      c.name === (cardType === 'peach' ? BasicCardName.PEACH : BasicCardName.WINE)
+    );
+  }
+
+  // 处理濒死阶段的响应（使用桃或酒）
+  handleDyingResponse(playerId: string, cardType: 'peach' | 'wine'): boolean {
+    const player = this.state.players.find(p => p.id === playerId);
+    if (!player || !this.state.dyingState) return false;
+
+    // 检查是否是濒死玩家本人
+    if (this.state.dyingState.playerId !== playerId) {
+      console.log('只有濒死玩家本人可以使用桃或酒自救');
+      return false;
+    }
+
+    // 检查手牌中是否有对应的牌
+    if (!this.hasCardOfType(player.handCards, cardType)) {
+      console.log(`${player.character.name} 手牌中没有【${cardType === 'peach' ? '桃' : '酒'}】`);
+      return false;
+    }
+
+    // 使用牌
+    const cardIndex = this.findCardIndexByType(player.handCards, cardType);
+
+    if (cardIndex !== -1) {
+      const usedCard = player.handCards.splice(cardIndex, 1)[0];
+      this.state.discardPile.push(usedCard);
+
+      // 回复1点体力
+      player.character.hp += 1;
+      this.state.dyingState.currentPeaches += 1;
+
+      console.log(`${player.character.name} 使用【${usedCard.name}】回复1点体力，当前体力: ${player.character.hp}`);
+
+      // 检查是否脱离濒死状态
+      if (player.character.hp > 0) {
+        console.log(`${player.character.name} 脱离濒死状态`);
+        this.exitDyingPhase();
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  // 检查濒死玩家是否有桃或酒
+  checkDyingPlayerHasSaveCard(playerId: string): { hasPeach: boolean; hasWine: boolean } {
+    const player = this.state.players.find(p => p.id === playerId);
+    if (!player) return { hasPeach: false, hasWine: false };
+
+    const hasPeach = player.handCards.some(card => card.name === BasicCardName.PEACH);
+    const hasWine = player.handCards.some(card => card.name === BasicCardName.WINE);
+
+    return { hasPeach, hasWine };
+  }
+
+  // 玩家放弃自救（死亡）
+  giveUpDying(playerId: string): boolean {
+    if (!this.state.dyingState || this.state.dyingState.playerId !== playerId) {
+      console.log('当前不在濒死状态或不是该玩家的濒死阶段');
+      return false;
+    }
+
+    const player = this.state.players.find(p => p.id === playerId);
+    if (!player) return false;
+
+    console.log(`${player.character.name} 放弃自救，角色死亡`);
+
+    // 退出濒死阶段，标记为死亡
+    this.exitDyingPhase(true);
+
+    return true;
+  }
+
+  // 处理AI濒死响应
+  private handleAIDyingResponse(player: Player): void {
+    if (!this.state.dyingState) return;
+
+    const { hasPeach, hasWine } = this.checkDyingPlayerHasSaveCard(player.id);
+
+    // 优先使用桃，其次使用酒
+    if (hasPeach) {
+      this.handleDyingResponse(player.id, 'peach');
+    } else if (hasWine && this.state.dyingState.canUseWine) {
+      this.handleDyingResponse(player.id, 'wine');
+    } else {
+      // 没有桃或酒，死亡
+      console.log(`${player.character.name} 没有【桃】或【酒】，无法自救`);
+      this.exitDyingPhase(true); // true 表示死亡
+    }
+  }
+
+  // 退出濒死阶段
+  private exitDyingPhase(playerDied: boolean = false): void {
+    const dyingState = this.state.dyingState;
+    const dyingPlayerId = dyingState?.playerId;
+    const pendingDraw = dyingState?.pendingDraw;
+    this.state.dyingState = undefined;
+
+    if (playerDied && dyingPlayerId) {
+      const player = this.state.players.find(p => p.id === dyingPlayerId);
+      if (player) {
+        this.handleDeath(player);
+      }
+    } else {
+      // 脱离濒死，回到出牌阶段
+      console.log('濒死阶段结束，回到出牌阶段继续游戏');
+
+      // 切换回出牌阶段
+      this.state.phase = GamePhase.PLAY;
+
+      // 如果有延迟摸牌（苦肉技能），执行摸牌
+      if (pendingDraw && pendingDraw > 0 && dyingPlayerId) {
+        const player = this.state.players.find(p => p.id === dyingPlayerId);
+        if (player) {
+          console.log(`${player.character.name} 濒死判定通过，执行苦肉的摸${pendingDraw}张牌效果`);
+          const drawResult = this.cardManager.draw(this.state.deck, pendingDraw);
+          player.handCards.push(...drawResult.cards);
+
+          const drawnCardNames = drawResult.cards.map(c => `【${c.name}】[${c.suit}${c.number}]`).join('、');
+          console.log(`${player.character.name} 【苦肉】摸${pendingDraw}张牌: ${drawnCardNames}`);
+          console.log(`${player.character.name} 当前手牌数: ${player.handCards.length}`);
+
+          // 通知UI更新
+          this.actionListeners.forEach(listener => listener({
+            action: GameAction.PLAY_CARD,
+            playerId: player.id,
+            cardId: '',
+            cardName: '苦肉摸牌',
+            targetIds: [player.id],
+            isResponse: false,
+            logMessage: `${player.character.name} 脱离濒死状态，【苦肉】摸${pendingDraw}张牌: ${drawnCardNames}`,
+          }));
+          return; // 已经发送了通知，直接返回
+        }
+      }
+
+      // 通知UI更新
+      const player = dyingPlayerId ? this.state.players.find(p => p.id === dyingPlayerId) : undefined;
+      if (player) {
+        this.actionListeners.forEach(listener => listener({
+          action: GameAction.PLAY_CARD,
+          playerId: player.id,
+          cardId: '',
+          cardName: '脱离濒死',
+          targetIds: [player.id],
+          isResponse: false,
+          logMessage: `${player.character.name} 脱离濒死状态，继续出牌阶段`,
+        }));
+      }
+    }
+  }
+
   // 造成伤害
   dealDamage(fromId: string, toId: string, amount: number, damageType?: 'normal' | 'fire' | 'thunder'): void {
     const fromPlayer = this.state.players.find(p => p.id === fromId);
@@ -1560,9 +1789,10 @@ export class GameEngine {
     // 触发受伤技能（简化版）
     this.triggerSkill(target, SkillTrigger.ON_DAMAGE, { fromPlayer, amount, damageType });
 
+    // 如果体力降至0或以下，进入濒死阶段
     if (target.character.hp <= 0) {
-      console.log(`${target.character.name} 体力降至0或以下，准备处理死亡`);
-      this.handleDeath(target, fromId);
+      console.log(`${target.character.name} 体力降至0或以下，进入濒死阶段`);
+      this.enterDyingPhase(target.id);
     }
   }
 
@@ -1592,13 +1822,29 @@ export class GameEngine {
         const skillContext: SkillContext = {
           player,
           game: this.state,
+          engine: this,
           target: context.fromPlayer,
           card: context.card,
+          source: context.fromPlayer,
+          damage: context.amount,
+          damageType: context.damageType,
         };
 
         // 执行技能
         try {
-          skill.execute(skillContext);
+          const result = skill.execute(skillContext);
+
+          // 如果技能执行成功且有消息，通知前端显示提示
+          if (result.success && result.message) {
+            this.actionListeners.forEach(listener => listener({
+              action: GameAction.USE_SKILL,
+              playerId: player.id,
+              skillId: skill.id,
+              targetIds: result.affectedTargets?.map(t => t.id),
+              logMessage: result.message,
+              isEffectResult: true,
+            }));
+          }
         } catch (error) {
           console.error(`执行技能 ${skill.name} 时出错:`, error);
         }
@@ -2438,6 +2684,36 @@ export class GameEngine {
     return true;
   }
 
+  // 火攻无伤害结束（没有同花色手牌时）
+  private resolveFireAttackNoDamage(): void {
+    const pendingResponse = this.state.pendingResponse;
+    if (!pendingResponse || !pendingResponse.fireAttackState) {
+      console.log('没有待处理的火攻响应');
+      return;
+    }
+
+    const { sourceId, targetId, shownCard } = pendingResponse.fireAttackState;
+    const player = this.state.players.find(p => p.id === sourceId);
+    const target = this.state.players.find(p => p.id === targetId);
+
+    if (player && target) {
+      console.log(`${player.character.name} 没有 ${shownCard.suit} 花色的手牌，火攻结束，未造成伤害`);
+
+      // 通知前端
+      this.actionListeners.forEach(listener => listener({
+        action: GameAction.PLAY_CARD,
+        playerId: player.id,
+        cardName: '火攻',
+        logMessage: `${player.character.name} 没有 ${shownCard.suit} 花色的手牌，火攻结束`,
+        isEffectResult: true,
+      }));
+    }
+
+    // 清除火攻状态
+    this.state.pendingResponse = undefined;
+    this.state.phase = GamePhase.PLAY;
+  }
+
   // AI无懈可击响应处理
   private processAINullificationResponse(sourcePlayer: Player, spellCard: Card): void {
     // 如果锦囊牌是人类玩家打出的，不提示人类玩家使用无懈可击（自己不能无懈自己的锦囊）
@@ -2776,10 +3052,11 @@ export class GameEngine {
       return true;
     }
 
-    // 检查是否创建了新的pendingResponse（多目标锦囊牌或决斗的情况）
+    // 检查是否创建了新的pendingResponse（多目标锦囊牌、决斗或火攻的情况）
     // 如果是多目标锦囊牌，startMultiTargetResponse会创建新的pendingResponse
     // 如果是决斗，startDuel会创建新的pendingResponse（包含duelState）
-    if (this.state.pendingResponse && (this.state.pendingResponse.multiTargetQueue || this.state.pendingResponse.duelState)) {
+    // 如果是火攻，executeSpellEffect会创建新的pendingResponse（包含fireAttackState）
+    if (this.state.pendingResponse && (this.state.pendingResponse.multiTargetQueue || this.state.pendingResponse.duelState || this.state.pendingResponse.fireAttackState)) {
       console.log(`【${cardName}】需要继续响应流程`);
       // 不清除pendingResponse，不设置phase为PLAY，不触发监听器
       // 响应流程会自行处理

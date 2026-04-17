@@ -1,12 +1,23 @@
-// 核心模块统一导出
+/**
+ * 核心模块导出
+ * 提供游戏引擎的核心功能
+ */
 
-// 技能系统
-export * from './skill';
+// 游戏循环
+export { GameLoop } from './GameLoop';
 
-// 服务
-export * from './service/LoggerService';
+// 事件总线
+export { EventBus, globalEventBus } from './EventBus';
 
-// 引擎、管理器等将在后续实现
-// export * from './engine/GameEngine';
-// export * from './manager/CardManager';
-// export * from './manager/CharacterManager';
+// 状态管理
+export { StateManager, globalStateManager } from './StateManager';
+
+// 性能优化工具
+export {
+  debounce,
+  throttle,
+  memoize,
+  CacheManager,
+  ObjectPool,
+  PerformanceMonitor,
+} from './utils/PerformanceOptimizer';

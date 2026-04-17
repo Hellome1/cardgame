@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { GameState, GameAction, GamePhase, ResponseType, SpellCardName, CardType, BasicCardName } from '../types/game';
 import { GameEngine } from '../game/GameEngine';
+import { SkillManager } from '../game/SkillManager';
 
 // 模块级别的标志，确保 initGame 只执行一次
 let hasInitialized = false;
@@ -60,6 +61,9 @@ interface GameStore {
   pauseGame: () => void;  // 暂停游戏
   resumeGame: () => void;  // 恢复游戏
   executeSkill: (skillId: string, targetId?: string) => void;  // 执行技能
+  handleDyingResponse: (cardType: 'peach' | 'wine') => boolean;  // 处理濒死阶段响应
+  giveUpDying: () => boolean;  // 玩家放弃自救（死亡）
+  endGame: (showDebug?: boolean) => void;  // 结束游戏，返回主菜单，可选是否直接显示调试界面
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -448,6 +452,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
           logMessage = `${targetPlayer.character.name} 没有打出【闪】，受到【${isArchery ? '万箭齐发' : pendingResponse.request.cardName}】的${pendingResponse.request.damage}点伤害`;
         }
       }
+    } else if (pendingResponse.request.responseType === ResponseType.FIRE_ATTACK) {
+      // 火攻响应 - 弃置同花色牌造成火焰伤害
+      success = engine.respondToFireAttack(targetPlayer.id, cardId);
+      if (success) {
+        if (cardId) {
+          const playedCard = targetPlayer.handCards.find(c => c.id === cardId);
+          logMessage = `${targetPlayer.character.name} 弃置了【${playedCard?.name || '牌'}】，对 ${gameState.players.find(p => p.id === pendingResponse.fireAttackState?.targetId)?.character.name} 造成1点火焰伤害`;
+        } else {
+          logMessage = `${targetPlayer.character.name} 选择不弃牌，火攻结束`;
+        }
+      }
     } else {
       // 普通响应（闪）
       success = engine.respondToAttack(targetPlayer.id, cardId);
@@ -631,8 +646,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { engine, gameState, logs } = get();
     if (!engine || !gameState) return;
 
-    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-    const humanPlayer = gameState.players[0];
+    // 从引擎获取原始游戏状态（包含完整的技能对象）
+    const rawGameState = engine.getState();
+    const currentPlayer = rawGameState.players[rawGameState.currentPlayerIndex];
+    const humanPlayer = rawGameState.players[0];
 
     // 只能在自己的回合执行主动技能
     if (currentPlayer.id !== humanPlayer.id) {
@@ -640,7 +657,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
 
-    // 找到技能
+    // 找到技能（从原始状态中获取，确保execute方法存在）
     const skill = currentPlayer.character.skills.find(s => s.id === skillId);
     if (!skill) {
       console.log(`技能 ${skillId} 不存在`);
@@ -654,31 +671,118 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     // 构建技能上下文
-    const target = targetId ? gameState.players.find(p => p.id === targetId) : undefined;
+    const target = targetId ? rawGameState.players.find(p => p.id === targetId) : undefined;
     const skillContext = {
       player: currentPlayer,
-      game: gameState,
+      game: rawGameState,
       engine,
       target,
     };
 
     // 执行技能
     try {
-      skill.execute(skillContext);
-      console.log(`技能执行成功: ${skill.name}`);
+      // 优先使用技能对象的execute方法
+      if (typeof skill.execute === 'function') {
+        skill.execute(skillContext);
+        console.log(`技能执行成功: ${skill.name}`);
+      } else {
+        // 如果没有execute方法，使用SkillManager的类型安全方法
+        console.log(`技能 ${skill.name} 没有execute方法，使用SkillManager执行`);
+        const success = SkillManager.executeSkillById(skillId, skillContext);
+        if (!success) {
+          console.error(`无法执行技能 ${skill.name}：SkillManager中没有对应的技能执行器`);
+          return;
+        }
+      }
+    } catch (error) {
+      console.error(`执行技能 ${skill.name} 时出错:`, error);
+      return;
+    }
 
-      // 强制创建新的游戏状态引用，确保React检测到变化
+    // 强制创建新的游戏状态引用，确保React检测到变化
+    const newGameState = engine.getState();
+    const clonedState = JSON.parse(JSON.stringify(newGameState));
+
+    set({
+      gameState: clonedState,
+      logs: [`${currentPlayer.character.name} 使用【${skill.name}】`, ...logs].slice(0, 50),
+    });
+
+    // 技能发动后刷新计时器（重置为第四条）
+    get().refreshTimer();
+
+    console.log(`[executeSkill] 游戏状态已更新，${currentPlayer.character.name} 当前手牌数: ${clonedState.players[0].handCards.length}`);
+  },
+
+  // 处理濒死阶段响应（使用桃或酒）
+  handleDyingResponse: (cardType: 'peach' | 'wine') => {
+    const { engine, gameState, logs } = get();
+    if (!engine || !gameState || !gameState.dyingState) return false;
+
+    const dyingPlayerId = gameState.dyingState.playerId;
+    const result = engine.handleDyingResponse(dyingPlayerId, cardType);
+
+    if (result) {
+      // 更新游戏状态
       const newGameState = engine.getState();
       const clonedState = JSON.parse(JSON.stringify(newGameState));
 
+      const dyingPlayer = clonedState.players.find((p: { id: string }) => p.id === dyingPlayerId);
+      const cardName = cardType === 'peach' ? '桃' : '酒';
+
       set({
         gameState: clonedState,
-        logs: [`${currentPlayer.character.name} 使用【${skill.name}】`, ...logs].slice(0, 50),
+        logs: [`${dyingPlayer.character.name} 使用【${cardName}】自救，回复1点体力`, ...logs].slice(0, 50),
       });
 
-      console.log(`[executeSkill] 游戏状态已更新，${currentPlayer.character.name} 当前手牌数: ${clonedState.players[0].handCards.length}`);
-    } catch (error) {
-      console.error(`执行技能 ${skill.name} 时出错:`, error);
+      return true;
     }
+
+    return false;
+  },
+
+  // 玩家放弃自救（死亡）
+  giveUpDying: () => {
+    const { engine, gameState, logs } = get();
+    if (!engine || !gameState || !gameState.dyingState) return false;
+
+    const dyingPlayerId = gameState.dyingState.playerId;
+    const result = engine.giveUpDying(dyingPlayerId);
+
+    if (result) {
+      // 更新游戏状态
+      const newGameState = engine.getState();
+      const clonedState = JSON.parse(JSON.stringify(newGameState));
+
+      const dyingPlayer = clonedState.players.find((p: { id: string }) => p.id === dyingPlayerId);
+
+      set({
+        gameState: clonedState,
+        logs: [`${dyingPlayer.character.name} 放弃自救，角色死亡`, ...logs].slice(0, 50),
+      });
+
+      return true;
+    }
+
+    return false;
+  },
+
+  // 结束游戏，返回主菜单
+  endGame: (showDebug = false) => {
+    const { stopTimer } = get();
+    // 停止计时器
+    stopTimer();
+    // 重置游戏状态
+    set({
+      isGameStarted: false,
+      gameState: null,
+      engine: null,
+      selectedCardId: null,
+      selectedTargetIds: [],
+      logs: [],
+      attackCountThisTurn: 0,
+    });
+    // 重置初始化标志
+    resetGameInitialization();
   },
 }));

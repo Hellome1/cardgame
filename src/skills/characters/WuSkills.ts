@@ -200,20 +200,21 @@ export class KeJiSkill extends PassiveSkill {
 
 /**
  * 黄盖 - 苦肉：出牌阶段，你可以失去1点体力，然后摸两张牌。
+ * 注意：如果失去体力后进入濒死状态，需要先进行濒死判定，救活后才能摸牌
  */
 export class KuRouSkill extends ActiveSkill {
   constructor() {
     super({
       id: 'kurou',
       name: '苦肉',
-      description: '出牌阶段，你可以失去1点体力，然后摸两张牌。',
+      description: '出牌阶段，你可以失去1点体力，然后摸两张牌。（若体力降至0需先进行濒死判定）',
       trigger: SkillTrigger.PLAY,
     });
   }
 
   protected checkCanUse(context: SkillContext): boolean {
-    // 需要至少有1点体力
-    return context.player.character.hp > 1;
+    // 只要有体力就可以使用（体力为1时使用会进入濒死阶段）
+    return context.player.character.hp >= 1;
   }
 
   protected onExecute(context: SkillContext): SkillResult {
@@ -223,7 +224,19 @@ export class KuRouSkill extends ActiveSkill {
     player.character.hp -= 1;
     console.log(`${player.character.name} 【苦肉】失去1点体力，当前体力: ${player.character.hp}`);
 
-    // 摸两张牌
+    // 如果体力降至0或以下，进入濒死阶段（摸牌延迟到濒死判定后）
+    if (player.character.hp <= 0) {
+      console.log(`${player.character.name} 体力降至0，进入濒死阶段，濒死判定通过后才能摸牌`);
+      // 触发濒死阶段，传入延迟摸牌数2张
+      engine.enterDyingPhase(player.id, 2);
+
+      return {
+        success: true,
+        message: `${player.character.name} 发动【苦肉】，失去1点体力并进入濒死阶段`,
+      };
+    }
+
+    // 体力未降至0，直接摸两张牌
     const drawResult = engine['cardManager'].draw(engine.getState().deck, 2);
     player.handCards.push(...drawResult.cards);
 

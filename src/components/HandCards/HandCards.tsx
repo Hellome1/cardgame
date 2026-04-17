@@ -11,6 +11,7 @@ interface HandCardsProps {
   selectedCardId: string | null;
   selectedDiscardCards: string[];
   selectedResponseCard: string | null;
+  selectedDyingCard: string | null;
   discardInfo: { maxCards: number; cardsToDiscard: number } | null;
   pendingResponse: PendingResponse | undefined;
   isCardPlayable: (card: CardType) => boolean;
@@ -40,6 +41,7 @@ export const HandCards: React.FC<HandCardsProps> = ({
   selectedCardId,
   selectedDiscardCards,
   selectedResponseCard,
+  selectedDyingCard,
   discardInfo,
   pendingResponse,
   isCardPlayable,
@@ -105,6 +107,7 @@ export const HandCards: React.FC<HandCardsProps> = ({
   const isPlayPhase = gamePhase === GamePhase.PLAY;
   const isDiscardPhase = gamePhase === GamePhase.DISCARD;
   const isResponsePhase = gamePhase === GamePhase.RESPONSE;
+  const isDyingPhase = gamePhase === GamePhase.DYING;
 
   // 决斗阶段使用 duelState.currentTurnId 判断
   const isDuel = pendingResponse?.request.responseType === 'duel';
@@ -145,11 +148,22 @@ export const HandCards: React.FC<HandCardsProps> = ({
           isValidResponseCard(card, 'nullify') &&
           pendingResponse.request.sourcePlayerId !== humanPlayer.id;
 
-        const isResponseCard = isDodgeResponse || isDuelResponse || isAttackResponse || isNullifyResponse;
+        // 火攻响应阶段：只能选择与展示牌同花色的手牌
+        const isFireAttackResponse = isResponsePhase &&
+          pendingResponse?.request.responseType === 'fire_attack' &&
+          pendingResponse.request.targetPlayerId === humanPlayer.id &&
+          pendingResponse.fireAttackState &&
+          card.suit === pendingResponse.fireAttackState.shownCard.suit;
+
+        const isResponseCard = isDodgeResponse || isDuelResponse || isAttackResponse || isNullifyResponse || isFireAttackResponse;
+
+        // 濒死阶段：只能选择桃或酒
+        const isDyingCard = isDyingPhase &&
+          (card.name === '桃' || card.name === '酒');
 
         // 出牌阶段：检查卡牌是否可用（攻击范围、使用次数等）
         const isPlayable = isCardPlayable(card);
-        const isClickable = isHumanTurn && (isPlayable || (isDiscardPhase && discardInfo && discardInfo.cardsToDiscard > 0)) || isResponseCard;
+        const isClickable = isHumanTurn && (isPlayable || (isDiscardPhase && discardInfo && discardInfo.cardsToDiscard > 0)) || isResponseCard || isDyingCard;
 
         // 弃牌阶段选中状态
         const isDiscardSelected = isDiscardPhase && selectedDiscardCards.includes(card.id);
@@ -157,7 +171,10 @@ export const HandCards: React.FC<HandCardsProps> = ({
         // 响应阶段选中状态
         const isResponseSelected = isResponsePhase && selectedResponseCard === card.id;
 
-        const isSelected = (selectedCardId === card.id && isPlayPhase) || isDiscardSelected || isResponseSelected;
+        // 濒死阶段选中状态
+        const isDyingSelected = isDyingPhase && selectedDyingCard === card.id;
+
+        const isSelected = (selectedCardId === card.id && isPlayPhase) || isDiscardSelected || isResponseSelected || isDyingSelected;
 
         return (
           <div
