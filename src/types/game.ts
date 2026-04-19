@@ -279,6 +279,8 @@ export enum GameAction {
   USE_SKILL = 'use_skill',
   DISCARD_CARD = 'discard_card',
   END_TURN = 'end_turn',
+  JUDGE = 'judge',
+  SKILL_STEAL_CARD = 'skill_steal_card', // 技能获得手牌（如反馈）
 }
 
 // 动作请求
@@ -292,4 +294,13 @@ export interface ActionRequest {
   isResponse?: boolean; // 标记是否是响应动作（如打出闪），不触发动画
   logMessage?: string; // 用于游戏记录的日志消息
   isEffectResult?: boolean; // 标记是否是锦囊牌效果执行后的结果通知，避免重复记录日志
+  // 判定相关字段
+  judgeType?: string; // 判定类型：'supply_shortage' | 'indulgence' | 'lightning'
+  judgeCard?: Card; // 判定牌
+  isEffective?: boolean; // 判定是否生效
+  // 火攻相关字段
+  fireAttackShownCard?: Card; // 火攻时目标展示的牌
+  // 技能偷牌相关字段
+  stolenCard?: Card; // 被偷走的牌
+  stolenFromPlayerId?: string; // 被偷牌的玩家ID
 }

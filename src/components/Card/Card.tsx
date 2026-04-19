@@ -63,7 +63,10 @@ export const Card: React.FC<CardProps> = ({
       onClick={!isDisabled ? onClick : undefined}
     >
       <div className="card-header">
-        <span className={`card-suit ${getSuitClass()}`}>{card.suit}</span>
+        <div className="card-suit-section">
+          <span className={`card-suit ${getSuitClass()}`}>{card.suit}</span>
+          <span className="card-suit-name">{card.name}</span>
+        </div>
         <span className="card-number">{card.number}</span>
       </div>
       <div className="card-body">

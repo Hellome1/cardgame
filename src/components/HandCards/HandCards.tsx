@@ -193,12 +193,6 @@ export const HandCards: React.FC<HandCardsProps> = ({
               onClick={() => onCardClick(card.id)}
               showDescription={true}
             />
-            {/* 堆叠时显示小号牌名 */}
-            {position.isStacked && (
-              <div className="stacked-card-name">
-                {card.name}
-              </div>
-            )}
           </div>
         );
       })}

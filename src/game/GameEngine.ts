@@ -475,41 +475,221 @@ export class GameEngine {
     const player = this.getCurrentPlayer();
     const delayedSpells = player.delayedSpells;
 
+    // 检查是否有延时锦囊牌需要判定
+    const hasDelayedSpell = delayedSpells.lightning || delayedSpells.supplyShortage || delayedSpells.indulgence;
+
+    if (!hasDelayedSpell) {
+      // 没有延时锦囊牌，直接进入摸牌阶段
+      this.state.phase = GamePhase.DRAW;
+      this.processTurn();
+      return;
+    }
+
+    // 有延时锦囊牌，进入判定流程
+    // 按照顺序处理：闪电 -> 兵粮寸断 -> 乐不思蜀
+    this.processDelayedSpells(player);
+  }
+
+  // 处理延时锦囊牌判定（带无懈可击时机）
+  private processDelayedSpells(player: Player): void {
+    const delayedSpells = player.delayedSpells;
+
     // 处理闪电
     if (delayedSpells.lightning) {
-      console.log(`${player.character.name} 的判定阶段：【闪电】判定`);
-      this.judgeLightning(player);
-      // 闪电处理完后继续处理其他延时锦囊
+      this.startDelayedSpellJudgment(player, 'lightning');
+      return;
     }
 
     // 处理兵粮寸断
     if (delayedSpells.supplyShortage) {
-      console.log(`${player.character.name} 的判定阶段：【兵粮寸断】判定`);
-      const success = this.judgeSupplyShortage(player);
-      if (success) {
-        // 判定成功，跳过摸牌阶段
-        console.log(`${player.character.name} 跳过摸牌阶段`);
-        this.state.phase = GamePhase.PLAY;
-        this.processTurn();
-        return;
-      }
+      this.startDelayedSpellJudgment(player, 'supply_shortage');
+      return;
     }
 
     // 处理乐不思蜀
     if (delayedSpells.indulgence) {
-      console.log(`${player.character.name} 的判定阶段：【乐不思蜀】判定`);
-      const success = this.judgeIndulgence(player);
-      if (success) {
-        // 判定成功，跳过出牌阶段
-        console.log(`${player.character.name} 跳过出牌阶段`);
-        // 直接进入弃牌阶段
-        this.handleDiscard();
-        return;
-      }
+      this.startDelayedSpellJudgment(player, 'indulgence');
+      return;
     }
 
+    // 所有延时锦囊牌处理完毕，进入摸牌阶段
     this.state.phase = GamePhase.DRAW;
     this.processTurn();
+  }
+
+  // 开始延时锦囊牌判定（给无懈可击时机）
+  private startDelayedSpellJudgment(player: Player, spellType: 'lightning' | 'supply_shortage' | 'indulgence'): void {
+    const spellNames: Record<string, string> = {
+      'lightning': '闪电',
+      'supply_shortage': '兵粮寸断',
+      'indulgence': '乐不思蜀',
+    };
+    const spellName = spellNames[spellType];
+
+    console.log(`${player.character.name} 的判定阶段：【${spellName}】即将判定，等待无懈可击...`);
+
+    // 创建判定执行函数
+    const judgeEffect = () => {
+      this.executeDelayedSpellJudgment(player, spellType);
+    };
+
+    // 创建响应请求，给场上玩家打出无懈可击的机会
+    this.state.pendingResponse = {
+      request: {
+        targetPlayerId: player.id, // 延时锦囊牌的目标玩家（即当前判定玩家）
+        sourcePlayerId: player.id,
+        cardName: spellName,
+        responseCardName: SpellCardName.NULLIFICATION,
+        damage: 0,
+        responseType: ResponseType.NULLIFY,
+        spellCardEffect: judgeEffect,
+      },
+      resolved: false,
+      result: false,
+    };
+
+    // 进入响应阶段
+    this.state.phase = GamePhase.RESPONSE;
+
+    // 检查是否有AI可以打出无懈可击
+    const hasDelayedSpell = spellType === 'lightning' ? player.delayedSpells.lightning :
+      spellType === 'supply_shortage' ? player.delayedSpells.supplyShortage :
+        player.delayedSpells.indulgence;
+    if (hasDelayedSpell) {
+      this.processAINullificationResponseForDelayedSpell(player, spellName, judgeEffect);
+    } else {
+      // 没有对应的延时锦囊牌，直接执行判定
+      judgeEffect();
+    }
+  }
+
+  // 执行延时锦囊牌判定（无懈可击响应后调用）
+  private executeDelayedSpellJudgment(player: Player, spellType: 'lightning' | 'supply_shortage' | 'indulgence'): void {
+    let shouldSkipToNext = false;
+
+    switch (spellType) {
+      case 'lightning':
+        if (player.delayedSpells.lightning) {
+          console.log(`${player.character.name} 的判定阶段：【闪电】判定`);
+          this.judgeLightning(player);
+        }
+        break;
+      case 'supply_shortage':
+        if (player.delayedSpells.supplyShortage) {
+          console.log(`${player.character.name} 的判定阶段：【兵粮寸断】判定`);
+          const success = this.judgeSupplyShortage(player);
+          if (success) {
+            // 判定成功，跳过摸牌阶段
+            console.log(`${player.character.name} 跳过摸牌阶段`);
+            this.state.phase = GamePhase.PLAY;
+            this.processTurn();
+            return;
+          }
+        }
+        break;
+      case 'indulgence':
+        if (player.delayedSpells.indulgence) {
+          console.log(`${player.character.name} 的判定阶段：【乐不思蜀】判定`);
+          const success = this.judgeIndulgence(player);
+          if (success) {
+            // 判定成功，跳过出牌阶段
+            console.log(`${player.character.name} 跳过出牌阶段`);
+            // 直接进入弃牌阶段
+            this.handleDiscard();
+            return;
+          }
+        }
+        break;
+    }
+
+    // 继续处理下一个延时锦囊牌
+    this.processDelayedSpells(player);
+  }
+
+  // AI无懈可击响应（用于延时锦囊牌判定前）
+  private processAINullificationResponseForDelayedSpell(
+    targetPlayer: Player,
+    spellName: string,
+    judgeEffect: () => void
+  ): void {
+    // 检查所有AI玩家是否有无懈可击（排除延时锦囊牌的目标玩家自己）
+    const otherPlayers = this.state.players.filter(p =>
+      p.id !== targetPlayer.id && !p.isDead && p.isAI
+    );
+
+    // 检查是否有AI玩家有无懈可击
+    const playersWithNullification = otherPlayers.filter(player =>
+      player.handCards.some(c => c.name === SpellCardName.NULLIFICATION)
+    );
+
+    // 如果没有AI玩家有无懈可击，立即执行判定
+    if (playersWithNullification.length === 0) {
+      console.log(`没有AI玩家有无懈可击，【${spellName}】判定立即进行`);
+      judgeEffect();
+      return;
+    }
+
+    // 延迟一下让AI决定是否使用无懈可击
+    setTimeout(() => {
+      const currentPending = this.state.pendingResponse;
+      if (!currentPending || currentPending.resolved) return;
+      if (currentPending.request.responseType !== ResponseType.NULLIFY) return;
+
+      // 按血量排序（血量低的优先）
+      const sortedPlayers = [...playersWithNullification].sort((a, b) => a.character.hp - b.character.hp);
+
+      for (const player of sortedPlayers) {
+        const nullificationCard = player.handCards.find(
+          c => c.name === SpellCardName.NULLIFICATION
+        );
+        if (!nullificationCard) continue;
+
+        // 判断是否使用无懈可击（保护目标玩家）
+        const shouldUse = this.shouldUseNullificationForDelayedSpell(player, targetPlayer, spellName);
+
+        if (shouldUse) {
+          console.log(`AI ${player.character.name} 打出【无懈可击】抵消【${spellName}】`);
+          this.respondToNullification(player.id, nullificationCard.id);
+          return;
+        }
+      }
+
+      // 没有AI打出无懈可击，执行判定
+      console.log(`没有AI使用无懈可击，【${spellName}】判定进行`);
+      judgeEffect();
+    }, 800);
+  }
+
+  // 判断是否应对延时锦囊牌使用无懈可击
+  private shouldUseNullificationForDelayedSpell(player: Player, targetPlayer: Player, spellName: string): boolean {
+    // 判断是否为盟友
+    const isAlly = (identity1: Identity, identity2: Identity): boolean => {
+      if ((identity1 === Identity.LORD || identity1 === Identity.LOYALIST) &&
+        (identity2 === Identity.LORD || identity2 === Identity.LOYALIST)) {
+        return true;
+      }
+      if (identity1 === Identity.REBEL && identity2 === Identity.REBEL) {
+        return true;
+      }
+      return false;
+    };
+
+    const targetIsAlly = isAlly(player.identity, targetPlayer.identity);
+
+    // 根据延时锦囊牌类型和盟友关系决定是否使用无懈可击
+    switch (spellName) {
+      case '闪电':
+        // 闪电：通常不使用无懈可击，因为可能转移到自己身上
+        return false;
+      case '兵粮寸断':
+        // 兵粮寸断：对盟友使用无懈可击保护
+        return targetIsAlly;
+      case '乐不思蜀':
+        // 乐不思蜀：对盟友使用无懈可击保护
+        return targetIsAlly;
+      default:
+        return false;
+    }
   }
 
   // 判定乐不思蜀
@@ -564,6 +744,18 @@ export class GameEngine {
 
     // 判定结果不为梅花时生效
     const isEffective = judgeCard.suit !== CardSuit.CLUB;
+
+    // 通知前端显示判定动画
+    this.actionListeners.forEach(listener => listener({
+      action: GameAction.JUDGE,
+      playerId: player.id,
+      cardId: judgeCard.id,
+      cardName: judgeCard.name,
+      judgeType: 'supply_shortage',
+      judgeCard: judgeCard,
+      isEffective: isEffective,
+      logMessage: `${player.character.name} 【兵粮寸断】判定: ${judgeCard.suit}${judgeCard.number} ${judgeCard.name}，${isEffective ? '生效' : '未生效（梅花）'}`,
+    }));
 
     // 将判定牌放入弃牌堆
     this.state.discardPile.push(judgeCard);
@@ -850,6 +1042,15 @@ export class GameEngine {
       return this.executeMultiTargetSpell(player, card);
     }
 
+    // 延时锦囊牌（兵粮寸断、乐不思蜀、闪电）在使用时直接生效，放置到判定区
+    // 无懈可击的时机是在判定阶段开始前，而不是使用时
+    if (card.name === SpellCardName.SUPPLY_SHORTAGE ||
+      card.name === SpellCardName.INDULGENCE ||
+      card.name === SpellCardName.LIGHTNING) {
+      console.log(`${player.character.name} 使用【${card.name}】（延时锦囊牌，直接放置到判定区）`);
+      return this.executeSpellEffect(player, card, targets);
+    }
+
     // 创建锦囊牌效果函数（用于无懈可击抵消后执行）
     const spellEffect = () => {
       this.executeSpellEffect(player, card, targets);
@@ -1028,6 +1229,7 @@ export class GameEngine {
             targetIds: [fireTarget.id],
             logMessage: `${player.character.name} 对 ${fireTarget.character.name} 使用了【火攻】，${fireTarget.character.name} 展示了 [${shownCard.suit}${shownCard.number} ${shownCard.name}]，但 ${player.character.name} 没有同花色手牌`,
             isEffectResult: true,
+            fireAttackShownCard: shownCard,
           }));
 
           // 进入火攻提示阶段，显示没有同花色手牌的提示
@@ -1090,6 +1292,7 @@ export class GameEngine {
           targetIds: [fireTarget.id],
           logMessage: `${player.character.name} 对 ${fireTarget.character.name} 使用了【火攻】，${fireTarget.character.name} 展示了 [${shownCard.suit}${shownCard.number} ${shownCard.name}]`,
           isEffectResult: true,
+          fireAttackShownCard: shownCard,
         }));
 
         // 如果是AI使用，自动选择一张同花色牌弃置
@@ -1335,22 +1538,13 @@ export class GameEngine {
 
       case SpellCardName.SUPPLY_SHORTAGE:
         // 兵粮寸断：置于目标判定区
+        // 延时锦囊牌在使用时直接放置到判定区，不需要无懈可击响应
+        // 无懈可击的时机是在判定阶段开始前
         if (targets.length === 0) return false;
         const shortageTarget = targets[0];
         if (shortageTarget.isDead) return false;
         if (shortageTarget.delayedSpells.supplyShortage) {
           console.log(`${shortageTarget.character.name} 已经有【兵粮寸断】了`);
-          return false;
-        }
-
-        // 检查距离是否为1
-        const distance = DistanceCalculator.calculateDistance(
-          player,
-          shortageTarget,
-          this.state.players
-        );
-        if (distance > 1) {
-          console.log(`${shortageTarget.character.name} 距离太远，无法使用【兵粮寸断】`);
           return false;
         }
 
@@ -1844,6 +2038,25 @@ export class GameEngine {
               logMessage: result.message,
               isEffectResult: true,
             }));
+
+            // 如果是反馈技能，额外触发SKILL_STEAL_CARD动作用于动画
+            if (skill.id === 'fankui' && context.fromPlayer) {
+              const fromPlayer = context.fromPlayer;
+              // 获取被偷走的牌（最后一张从来源玩家手牌中移除的牌）
+              const stolenCard = player.handCards[player.handCards.length - 1];
+              if (stolenCard) {
+                this.actionListeners.forEach(listener => listener({
+                  action: GameAction.SKILL_STEAL_CARD,
+                  playerId: player.id,
+                  targetIds: [fromPlayer.id],
+                  skillId: skill.id,
+                  logMessage: result.message,
+                  stolenCard: stolenCard,
+                  stolenFromPlayerId: fromPlayer.id,
+                  isEffectResult: true,
+                }));
+              }
+            }
           }
         } catch (error) {
           console.error(`执行技能 ${skill.name} 时出错:`, error);
@@ -2044,8 +2257,15 @@ export class GameEngine {
   }
 
   // 添加动作监听器
-  onAction(listener: (action: ActionRequest) => void): void {
+  onAction(listener: (action: ActionRequest) => void): () => void {
     this.actionListeners.push(listener);
+    // 返回移除监听器的函数
+    return () => {
+      const index = this.actionListeners.indexOf(listener);
+      if (index !== -1) {
+        this.actionListeners.splice(index, 1);
+      }
+    };
   }
 
   // 执行动作
@@ -2944,26 +3164,74 @@ export class GameEngine {
       pendingResponse.result = true;
       pendingResponse.responseCardId = cardId;
 
-      // 清除响应状态，返回出牌阶段
-      this.state.pendingResponse = undefined;
-      this.state.phase = GamePhase.PLAY;
+      // 检查是否是延时锦囊牌（兵粮寸断、乐不思蜀、闪电）
+      const isDelayedSpell = pendingResponse.request.cardName === '兵粮寸断' ||
+        pendingResponse.request.cardName === '乐不思蜀' ||
+        pendingResponse.request.cardName === '闪电';
 
-      // 触发监听器通知 UI 更新
-      this.actionListeners.forEach(listener => listener({
-        action: GameAction.PLAY_CARD,
-        playerId: player.id,
-        cardId: cardId,
-        cardName: SpellCardName.NULLIFICATION,
-        targetIds: [pendingResponse.request.sourcePlayerId],
-        isResponse: true,
-        logMessage: logMessage,
-      }));
+      if (isDelayedSpell) {
+        // 延时锦囊牌被无懈可击抵消后，将牌放入弃牌堆并继续处理下一个延时锦囊牌
+        const targetPlayer = this.state.players.find(p => p.id === pendingResponse.request.targetPlayerId);
+        if (targetPlayer) {
+          // 移除延时锦囊牌
+          if (pendingResponse.request.cardName === '兵粮寸断' && targetPlayer.delayedSpells.supplyShortage) {
+            const card = targetPlayer.delayedSpells.supplyShortage;
+            delete targetPlayer.delayedSpells.supplyShortage;
+            this.state.discardPile.push(card);
+            this.saveDiscardPileState(`${targetPlayer.character.name}的兵粮寸断被无懈可击`, [card]);
+          } else if (pendingResponse.request.cardName === '乐不思蜀' && targetPlayer.delayedSpells.indulgence) {
+            const card = targetPlayer.delayedSpells.indulgence;
+            delete targetPlayer.delayedSpells.indulgence;
+            this.state.discardPile.push(card);
+            this.saveDiscardPileState(`${targetPlayer.character.name}的乐不思蜀被无懈可击`, [card]);
+          } else if (pendingResponse.request.cardName === '闪电' && targetPlayer.delayedSpells.lightning) {
+            const card = targetPlayer.delayedSpells.lightning;
+            delete targetPlayer.delayedSpells.lightning;
+            this.state.discardPile.push(card);
+            this.saveDiscardPileState(`${targetPlayer.character.name}的闪电被无懈可击`, [card]);
+          }
+        }
 
-      // 只有当当前玩家不是AI时才继续游戏流程
-      // （AI使用锦囊牌时，AI的出牌循环会继续处理）
-      const currentPlayer = this.getCurrentPlayer();
-      if (!currentPlayer.isAI) {
-        this.processTurn();
+        // 清除响应状态
+        this.state.pendingResponse = undefined;
+
+        // 触发监听器通知 UI 更新
+        this.actionListeners.forEach(listener => listener({
+          action: GameAction.PLAY_CARD,
+          playerId: player.id,
+          cardId: cardId,
+          cardName: SpellCardName.NULLIFICATION,
+          targetIds: [pendingResponse.request.sourcePlayerId],
+          isResponse: true,
+          logMessage: logMessage,
+        }));
+
+        // 继续处理下一个延时锦囊牌
+        const currentPlayer = this.getCurrentPlayer();
+        if (!currentPlayer.isAI) {
+          this.processDelayedSpells(currentPlayer);
+        }
+      } else {
+        // 普通锦囊牌，清除响应状态，返回出牌阶段
+        this.state.pendingResponse = undefined;
+        this.state.phase = GamePhase.PLAY;
+
+        // 触发监听器通知 UI 更新
+        this.actionListeners.forEach(listener => listener({
+          action: GameAction.PLAY_CARD,
+          playerId: player.id,
+          cardId: cardId,
+          cardName: SpellCardName.NULLIFICATION,
+          targetIds: [pendingResponse.request.sourcePlayerId],
+          isResponse: true,
+          logMessage: logMessage,
+        }));
+
+        // 只有当当前玩家不是AI时才继续游戏流程
+        const currentPlayer = this.getCurrentPlayer();
+        if (!currentPlayer.isAI) {
+          this.processTurn();
+        }
       }
 
       return true;
@@ -3019,6 +3287,21 @@ export class GameEngine {
 
           // 没有AI打出无懈可击，执行锦囊牌效果
           console.log(`没有AI使用无懈可击，【${spellCardName}】生效`);
+
+          // 检查是否是延时锦囊牌
+          const isDelayedSpell = spellCardName === '兵粮寸断' ||
+            spellCardName === '乐不思蜀' ||
+            spellCardName === '闪电';
+
+          if (isDelayedSpell) {
+            // 延时锦囊牌，执行判定效果
+            const spellEffect = currentPending.request.spellCardEffect;
+            if (spellEffect) {
+              spellEffect();
+            }
+            return;
+          }
+
           this.resolveSpellCardEffect();
         }, 1000);
         return true;
@@ -3026,6 +3309,21 @@ export class GameEngine {
 
       // 没有其他AI玩家有无懈可击，直接执行锦囊牌效果
       console.log(`没有其他玩家有无懈可击，【${spellCardName}】生效`);
+
+      // 检查是否是延时锦囊牌
+      const isDelayedSpell = spellCardName === '兵粮寸断' ||
+        spellCardName === '乐不思蜀' ||
+        spellCardName === '闪电';
+
+      if (isDelayedSpell) {
+        // 延时锦囊牌，执行判定效果
+        const spellEffect = pendingResponse.request.spellCardEffect;
+        if (spellEffect) {
+          spellEffect();
+        }
+        return true;
+      }
+
       return this.resolveSpellCardEffect();
     }
   }

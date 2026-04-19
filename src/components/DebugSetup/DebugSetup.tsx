@@ -97,14 +97,11 @@ export const DebugSetup: React.FC<DebugSetupProps> = ({ onStartDebug, onCancel }
   
   // 使用 useMemo 计算初始玩家状态，确保使用同一个 fullDeck
   const initialPlayers = useMemo(() => {
+    // 查找指定的卡牌：桃、火攻、兵粮寸断、决斗
     const peachCard = fullDeck.find(c => c.name === '桃');
     const fireAttackCard = fullDeck.find(c => c.name === '火攻');
-    
-    // 随机选择2张其他牌（排除桃和火攻）
-    const otherCards = fullDeck
-      .filter(c => c.name !== '桃' && c.name !== '火攻')
-      .sort(() => Math.random() - 0.5)
-      .slice(0, 2);
+    const supplyShortageCard = fullDeck.find(c => c.name === '兵粮寸断');
+    const duelCard = fullDeck.find(c => c.name === '决斗');
     
     // 找到司马懿
     const simaYi = allCharacters.find(c => c.id === 'simayi');
@@ -112,13 +109,15 @@ export const DebugSetup: React.FC<DebugSetupProps> = ({ onStartDebug, onCancel }
     const selectedCardIds = [
       peachCard?.id || '',
       fireAttackCard?.id || '',
-      ...otherCards.map(c => c.id),
+      supplyShortageCard?.id || '',
+      duelCard?.id || '',
     ].filter(id => id !== '');
 
     const selectedCardNames = [
       peachCard?.name || '',
       fireAttackCard?.name || '',
-      ...otherCards.map(c => c.name),
+      supplyShortageCard?.name || '',
+      duelCard?.name || '',
     ].filter(name => name !== '');
 
     return [
@@ -158,22 +157,33 @@ export const DebugSetup: React.FC<DebugSetupProps> = ({ onStartDebug, onCancel }
   };
 
   const handleCardToggle = (cardId: string, cardName: string) => {
-    const newPlayers = [...players];
-    const player = newPlayers[selectedPlayerIndex];
-    const cardIndex = player.selectedCards.indexOf(cardId);
+    const newPlayers = players.map((p, index) => {
+      if (index !== selectedPlayerIndex) return p;
 
-    if (cardIndex > -1) {
-      player.selectedCards.splice(cardIndex, 1);
-      player.selectedCardNames?.splice(cardIndex, 1);
-    } else {
-      if (player.selectedCards.length < 8) {
-        player.selectedCards.push(cardId);
-        player.selectedCardNames?.push(cardName);
+      const cardIndex = p.selectedCards.indexOf(cardId);
+
+      if (cardIndex > -1) {
+        // 移除卡牌 - 创建新数组
+        return {
+          ...p,
+          selectedCards: p.selectedCards.filter((_, i) => i !== cardIndex),
+          selectedCardNames: p.selectedCardNames?.filter((_, i) => i !== cardIndex) || [],
+        };
       } else {
-        alert('每个玩家最多选择8张初始手牌');
-        return;
+        // 添加卡牌
+        if (p.selectedCards.length < 8) {
+          return {
+            ...p,
+            selectedCards: [...p.selectedCards, cardId],
+            selectedCardNames: [...(p.selectedCardNames || []), cardName],
+          };
+        } else {
+          alert('每个玩家最多选择8张初始手牌');
+          return p;
+        }
       }
-    }
+    });
+
     setPlayers(newPlayers);
   };
 
@@ -219,10 +229,14 @@ export const DebugSetup: React.FC<DebugSetupProps> = ({ onStartDebug, onCancel }
       .filter(c => !player.selectedCards.includes(c.id))
       .sort(() => Math.random() - 0.5)
       .slice(0, 4);
-    
+
     randomCards.forEach(card => {
       if (player.selectedCards.length < 8) {
         player.selectedCards.push(card.id);
+        if (!player.selectedCardNames) {
+          player.selectedCardNames = [];
+        }
+        player.selectedCardNames.push(card.name);
       }
     });
     setPlayers(newPlayers);
@@ -232,6 +246,15 @@ export const DebugSetup: React.FC<DebugSetupProps> = ({ onStartDebug, onCancel }
   const clearPlayerCards = () => {
     const newPlayers = [...players];
     newPlayers[selectedPlayerIndex].selectedCards = [];
+    newPlayers[selectedPlayerIndex].selectedCardNames = [];
+    setPlayers(newPlayers);
+  };
+
+  // 随机选择武将
+  const assignRandomCharacter = () => {
+    const newPlayers = [...players];
+    const randomCharacter = allCharacters[Math.floor(Math.random() * allCharacters.length)];
+    newPlayers[selectedPlayerIndex].characterId = randomCharacter.id;
     setPlayers(newPlayers);
   };
 
@@ -372,7 +395,15 @@ export const DebugSetup: React.FC<DebugSetupProps> = ({ onStartDebug, onCancel }
                       <div className="display-card-body">
                         <span className="display-card-name">{card.name}</span>
                       </div>
-                      <span className="display-remove">×</span>
+                      <span 
+                        className="display-remove"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCardToggle(card.id, card.name);
+                        }}
+                      >
+                        ×
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -491,40 +522,28 @@ export const DebugSetup: React.FC<DebugSetupProps> = ({ onStartDebug, onCancel }
                     </div>
                   </div>
 
-                  {/* 快捷操作 */}
-                  <div className="cards-actions">
-                    <button className="action-btn" onClick={assignRandomCards}>
-                      🎲 随机4张
-                    </button>
-                    <button className="action-btn clear" onClick={clearPlayerCards}>
-                      🗑️ 清空手牌
-                    </button>
-                  </div>
                 </div>
               )}
             </div>
 
-            {/* 底部导航 */}
+            {/* 底部按钮栏 - 根据当前标签页显示不同按钮 */}
             <div className="config-footer">
-              <div className="player-nav">
-                <button 
-                  className="nav-btn" 
-                  onClick={() => setSelectedPlayerIndex(Math.max(0, selectedPlayerIndex - 1))}
-                  disabled={selectedPlayerIndex === 0}
-                >
-                  ← 上一个玩家
+              {activeTab === 'character' ? (
+                // 武将选择界面：显示随机武将按钮
+                <button className="action-btn" onClick={assignRandomCharacter}>
+                  🎲 随机武将
                 </button>
-                <span className="nav-info">
-                  玩家 {selectedPlayerIndex + 1} / {playerCount}
-                </span>
-                <button 
-                  className="nav-btn" 
-                  onClick={() => setSelectedPlayerIndex(Math.min(playerCount - 1, selectedPlayerIndex + 1))}
-                  disabled={selectedPlayerIndex === playerCount - 1}
-                >
-                  下一个玩家 →
-                </button>
-              </div>
+              ) : (
+                // 手牌选择界面：显示随机手牌和清空手牌按钮
+                <>
+                  <button className="action-btn" onClick={assignRandomCards}>
+                    🎲 随机4张
+                  </button>
+                  <button className="action-btn clear" onClick={clearPlayerCards}>
+                    🗑️ 清空手牌
+                  </button>
+                </>
+              )}
               <button className="start-game-btn" onClick={handleStart}>
                 🎮 开始游戏
               </button>

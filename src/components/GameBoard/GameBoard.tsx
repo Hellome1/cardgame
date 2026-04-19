@@ -4,7 +4,7 @@ import { Card } from '../Card/Card';
 import { PlayerAvatar } from '../PlayerAvatar/PlayerAvatar';
 import { HandCards } from '../HandCards/HandCards';
 import { DebugSetup, DebugConfig } from '../DebugSetup/DebugSetup';
-import { GamePhase, Identity, CardType, SpellCardName, BasicCardName, ResponseType, Card as GameCard, PendingResponse } from '../../types/game';
+import { GamePhase, Identity, CardType, CardSuit, CardColor, SpellCardName, BasicCardName, ResponseType, Card as GameCard, PendingResponse } from '../../types/game';
 import { DistanceCalculator } from '../../game/DistanceCalculator';
 import './GameBoard.css';
 
@@ -27,7 +27,25 @@ interface PlayedCardInfo {
   playerName: string;
   targetName?: string;
   timestamp: number;
+  isFireAttackShown?: boolean; // 是否为火攻展示牌
+  isStolenCard?: boolean; // 是否为被偷的牌（用于反馈等技能动画）
 }
+
+// 花色显示
+const suitDisplay: Record<CardSuit, string> = {
+  [CardSuit.SPADE]: '♠',
+  [CardSuit.HEART]: '♥',
+  [CardSuit.CLUB]: '♣',
+  [CardSuit.DIAMOND]: '♦',
+};
+
+// 花色颜色
+const suitColors: Record<CardSuit, string> = {
+  [CardSuit.SPADE]: '#000',
+  [CardSuit.HEART]: '#d32f2f',
+  [CardSuit.CLUB]: '#000',
+  [CardSuit.DIAMOND]: '#d32f2f',
+};
 
 // 将函数定义移到组件外部
 const getPhaseText = (phase: GamePhase): string => {
@@ -141,6 +159,9 @@ export const GameBoard: React.FC = () => {
   // 出牌显示区域状态 - 支持多张牌排列
   const [playedCards, setPlayedCards] = useState<PlayedCardInfo[]>([]);
 
+  // 手牌消失动画状态（用于反馈等技能）
+  const [disappearingCards, setDisappearingCards] = useState<PlayedCardInfo[]>([]);
+
   // 牌堆查看弹窗状态
   const [showDeckModal, setShowDeckModal] = useState(false);
   const [deckSortBy, setDeckSortBy] = useState<'original' | 'type'>('original');
@@ -160,6 +181,16 @@ export const GameBoard: React.FC = () => {
 
   // 技能提示状态
   const [skillNotice, setSkillNotice] = useState<{ message: string; timestamp: number } | null>(null);
+
+  // 判定动画状态
+  const [judgeAnimation, setJudgeAnimation] = useState<{
+    judgeType: string;
+    judgeTypeName: string;
+    judgeCard: GameCard;
+    isEffective: boolean;
+    playerId: string;
+    timestamp: number;
+  } | null>(null);
 
   // 调试模式状态
   const [showDebugSetup, setShowDebugSetup] = useState(false);
@@ -312,6 +343,19 @@ export const GameBoard: React.FC = () => {
               .find(c => c.id === action.cardId);
           }
 
+          // 决斗响应的特殊处理：如果找不到卡牌，创建一个临时卡牌对象
+          if (!playedCard && isDuelResponse && action.cardName) {
+            playedCard = {
+              id: action.cardId || `duel_card_${Date.now()}`,
+              name: action.cardName,
+              type: 'basic' as CardType,
+              suit: CardSuit.SPADE,
+              number: 1,
+              color: CardColor.BLACK,
+              description: '决斗中打出的杀',
+            } as GameCard;
+          }
+
           if (player && playedCard) {
             const newCard: PlayedCardInfo = {
               id: `card_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -348,10 +392,97 @@ export const GameBoard: React.FC = () => {
           });
         }, 3000);
       }
+
+      // 处理技能获得手牌（如反馈）
+      if (action.action === 'skill_steal_card' && action.stolenCard && action.stolenFromPlayerId) {
+        const gameState = useGameStore.getState().gameState;
+        if (gameState) {
+          const fromPlayer = gameState.players.find(p => p.id === action.stolenFromPlayerId);
+          const toPlayer = gameState.players.find(p => p.id === action.playerId);
+
+          if (fromPlayer && toPlayer) {
+            // 创建被偷的牌的信息，用于动画显示
+            const stolenCardInfo: PlayedCardInfo = {
+              id: `stolen_${Date.now()}`,
+              card: action.stolenCard,
+              playerName: `${fromPlayer.character.name}→${toPlayer.character.name}`,
+              timestamp: Date.now(),
+              isStolenCard: true, // 标记为被偷的牌
+            };
+
+            // 添加到手牌消失动画列表
+            setDisappearingCards(prev => [...prev, stolenCardInfo]);
+
+            // 2秒后移除动画
+            setTimeout(() => {
+              setDisappearingCards(prev => prev.filter(c => c.id !== stolenCardInfo.id));
+            }, 2000);
+          }
+        }
+      }
+
+      // 处理火攻展示牌
+      if (action.action === 'play_card' && action.cardName === '火攻' && action.fireAttackShownCard) {
+        const gameState = useGameStore.getState().gameState;
+        if (gameState) {
+          const target = gameState.players.find(p => p.id === action.targetIds?.[0]);
+          if (target) {
+            const shownCardInfo: PlayedCardInfo = {
+              id: `fire_attack_shown_${Date.now()}`,
+              card: action.fireAttackShownCard,
+              playerName: `${target.character.name}展示`,
+              timestamp: Date.now(),
+              isFireAttackShown: true, // 标记为火攻展示牌
+            };
+            // 添加展示牌到列表开头
+            setPlayedCards(prev => [shownCardInfo, ...prev].slice(0, 5));
+            // 5秒后移除（火攻展示牌显示更久）
+            setTimeout(() => {
+              setPlayedCards(prev => prev.filter(c => c.id !== shownCardInfo.id));
+            }, 5000);
+          }
+        }
+      }
+
+      // 处理判定动画（兵粮寸断、乐不思蜀、闪电）
+      if (action.action === 'judge' && action.judgeCard) {
+        const judgeTypeNames: Record<string, string> = {
+          'supply_shortage': '兵粮寸断',
+          'indulgence': '乐不思蜀',
+          'lightning': '闪电',
+        };
+        const judgeTypeName = judgeTypeNames[action.judgeType || ''] || '判定';
+
+        // 设置判定动画状态
+        const currentTimestamp = Date.now();
+        setJudgeAnimation({
+          judgeType: action.judgeType || '',
+          judgeTypeName,
+          judgeCard: action.judgeCard,
+          isEffective: action.isEffective || false,
+          playerId: action.playerId,
+          timestamp: currentTimestamp,
+        });
+
+        // 3秒后清除判定动画
+        setTimeout(() => {
+          setJudgeAnimation(prev => {
+            if (prev && prev.timestamp === currentTimestamp) {
+              return null;
+            }
+            return prev;
+          });
+        }, 3000);
+      }
     };
 
     // 添加监听器
-    engine.onAction(handleAction);
+    const unsubscribe = engine.onAction(handleAction);
+
+    // 返回清理函数
+    return () => {
+      unsubscribe();
+    };
   }, [isGameStarted]);
 
   // 当cardAnimation变化时，计算位置并设置线条
@@ -624,8 +755,10 @@ export const GameBoard: React.FC = () => {
         return false; // 这些牌不需要选择目标
       }
 
-      if (selectedCard.name === SpellCardName.STEAL) {
-        // 顺手牵羊：距离限制为1
+      if (selectedCard.name === SpellCardName.STEAL ||
+        selectedCard.name === SpellCardName.SUPPLY_SHORTAGE ||
+        selectedCard.name === SpellCardName.INDULGENCE) {
+        // 顺手牵羊、兵粮寸断、乐不思蜀：距离限制为1
         const distance = DistanceCalculator.calculateDistance(humanPlayer, targetPlayer, gameState.players);
         return distance <= 1;
       }
@@ -990,7 +1123,7 @@ export const GameBoard: React.FC = () => {
 
         {/* 出牌显示区域 */}
         <div className="played-cards-area">
-          {playedCards.map((item, index) => (
+          {playedCards.filter(item => !item.isFireAttackShown).map((item, index) => (
             <div
               key={item.id}
               className="played-card-item"
@@ -1013,6 +1146,50 @@ export const GameBoard: React.FC = () => {
                       <span className="played-card-target">{item.targetName}</span>
                     </>
                   )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* 火攻展示牌（单独渲染在屏幕中央） */}
+        {playedCards.filter(item => item.isFireAttackShown).map((item) => (
+          <div
+            key={item.id}
+            className="played-card-item fire-attack-shown"
+          >
+            <div className="played-card-wrapper fire-attack-wrapper">
+              <Card
+                card={item.card}
+                isDisabled={true}
+                showDescription={false}
+              />
+              <div className="played-card-label fire-attack-label">
+                <span className="played-card-player">{item.playerName}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* 手牌消失动画区域（用于反馈等技能） */}
+        <div className="disappearing-cards-area">
+          {disappearingCards.map((item) => (
+            <div
+              key={item.id}
+              className="disappearing-card-item"
+              style={{
+                left: '50%',
+                marginLeft: '-60px',
+              }}
+            >
+              <div className="disappearing-card-wrapper">
+                <Card
+                  card={item.card}
+                  isDisabled={true}
+                  showDescription={false}
+                />
+                <div className="disappearing-card-label">
+                  <span className="disappearing-card-text">{item.playerName}</span>
                 </div>
               </div>
             </div>
@@ -1064,6 +1241,34 @@ export const GameBoard: React.FC = () => {
               <div className="skill-notice-content">
                 <span className="skill-notice-icon">✨</span>
                 <span className="skill-notice-text">{skillNotice.message}</span>
+              </div>
+            </div>
+          )}
+
+          {/* 判定动画面板 - 显示延时锦囊判定 */}
+          {judgeAnimation && (
+            <div className="judge-animation-panel">
+              <div className="judge-animation-content">
+                <div className="judge-type">{judgeAnimation.judgeTypeName}</div>
+                <div className="judge-card-display" style={{ color: suitColors[judgeAnimation.judgeCard.suit] }}>
+                  <span className="judge-card-suit">{suitDisplay[judgeAnimation.judgeCard.suit]}</span>
+                  <span className="judge-card-number">{judgeAnimation.judgeCard.number}</span>
+                  <span className="judge-card-name">{judgeAnimation.judgeCard.name}</span>
+                </div>
+                <div className={`judge-result ${judgeAnimation.isEffective ? 'effective' : 'ineffective'}`}>
+                  {judgeAnimation.isEffective ? '✓ 判定生效' : '✗ 判定未生效'}
+                </div>
+                <div className="judge-hint">
+                  {judgeAnimation.judgeType === 'supply_shortage' && (
+                    judgeAnimation.isEffective ? '跳过摸牌阶段' : '梅花判定，兵粮寸断失效'
+                  )}
+                  {judgeAnimation.judgeType === 'indulgence' && (
+                    judgeAnimation.isEffective ? '跳过出牌阶段' : '红桃判定，乐不思蜀失效'
+                  )}
+                  {judgeAnimation.judgeType === 'lightning' && (
+                    judgeAnimation.isEffective ? '受到3点雷电伤害' : '闪电转移给下家'
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -1219,12 +1424,8 @@ export const GameBoard: React.FC = () => {
                           {gameState.pendingResponse.request.targetPlayerId === humanPlayer.id ? (
                             // 当前玩家是火攻使用者，显示没有同花色手牌的提示
                             <>
-                              <div className="response-info">
-                                {gameState.players.find(p => p.id === gameState.pendingResponse?.fireAttackState?.targetId)?.character.name} 展示了
-                                【{gameState.pendingResponse.fireAttackState?.shownCard.suit}{gameState.pendingResponse.fireAttackState?.shownCard.number} {gameState.pendingResponse.fireAttackState?.shownCard.name}】
-                              </div>
-                              <div className="response-hint fire-attack-no-suit">
-                                你没有 {gameState.pendingResponse.fireAttackState?.shownCard.suit} 花色的手牌，无法造成伤害
+                              <div className="response-hint">
+                                你没有 {gameState.pendingResponse.fireAttackState?.shownCard.suit} 花色的手牌
                               </div>
                               <div className="response-buttons">
                                 <button
@@ -1250,12 +1451,8 @@ export const GameBoard: React.FC = () => {
                           {gameState.pendingResponse.request.targetPlayerId === humanPlayer.id ? (
                             // 当前玩家是火攻使用者，需要选择是否弃置同花色牌
                             <>
-                              <div className="response-info">
-                                {gameState.players.find(p => p.id === gameState.pendingResponse?.fireAttackState?.targetId)?.character.name} 展示了
-                                【{gameState.pendingResponse.fireAttackState?.shownCard.suit}{gameState.pendingResponse.fireAttackState?.shownCard.number} {gameState.pendingResponse.fireAttackState?.shownCard.name}】
-                              </div>
                               <div className="response-hint">
-                                请弃置一张 {gameState.pendingResponse.fireAttackState?.shownCard.suit} 花色的手牌造成1点火焰伤害，或点击取消结束火攻
+                                请弃置一张 {gameState.pendingResponse.fireAttackState?.shownCard.suit} 花色的手牌
                               </div>
                               <div className="response-buttons">
                                 <button
