@@ -116,8 +116,28 @@ export const HandCards: React.FC<HandCardsProps> = ({
     : pendingResponse?.request.targetPlayerId;
   const isResponseTarget = pendingResponse && currentTurnId === humanPlayer.id;
 
+  // 处理鼠标进入/离开手牌区
+  const handleMouseEnter = () => {
+    if (containerRef.current) {
+      containerRef.current.classList.add('hovered');
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (containerRef.current) {
+      containerRef.current.classList.remove('hovered');
+    }
+  };
+
   return (
-    <div className="hand-cards-container" ref={containerRef}>
+    <div 
+      className="hand-cards-container" 
+      ref={containerRef}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* 透明滑轨区域 - 用于保持悬停状态 */}
+      <div className="hand-cards-hover-track"></div>
       {cards.map((card, index) => {
         const position = cardPositions[index];
         if (!position) return null;
@@ -186,6 +206,8 @@ export const HandCards: React.FC<HandCardsProps> = ({
             }}
             data-selected={isSelected}
           >
+            {/* 透明悬停区域 - 延伸到卡牌下方，防止抖动 */}
+            <div className="hand-card-hover-area"></div>
             <Card
               card={card}
               isSelected={isSelected}

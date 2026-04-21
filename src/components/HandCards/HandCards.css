@@ -10,6 +10,18 @@
   overflow: visible;
 }
 
+/* 透明滑轨区域 - 容器级别，用于保持悬停状态 */
+.hand-cards-hover-track {
+  position: absolute;
+  bottom: -40px;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: transparent;
+  pointer-events: auto;
+  z-index: 0;
+}
+
 /* 所有手牌使用绝对定位，由计算的 offset 控制位置 */
 .hand-card-wrapper {
   position: absolute;
@@ -20,16 +32,34 @@
   cursor: pointer;
 }
 
-/* 默认悬停效果 - 只上移，不改变 z-index */
-.hand-card-wrapper:hover {
-  transform: translateY(-80%) !important;
+/* 透明悬停区域 - 延伸到卡牌下方，防止抖动 */
+.hand-card-hover-area {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: transparent;
+  z-index: -1;
 }
 
-/* 选中状态 - 高亮并向上位移（抽牌效果） */
+/* 默认悬停效果 - 使用固定像素值避免抖动 */
+.hand-card-wrapper:hover {
+  transform: translateY(calc(-50% - 10px)) !important;
+  z-index: 100 !important;
+}
+
+/* 当悬停透明区域时也触发手牌悬停效果 */
+.hand-card-wrapper:has(.hand-card-hover-area:hover) {
+  transform: translateY(calc(-50% - 10px)) !important;
+  z-index: 100 !important;
+}
+
+/* 选中状态 - 高亮并向上位移 */
 .hand-card-wrapper.selected,
 .hand-card-wrapper[data-selected="true"] {
   z-index: 100 !important;
-  transform: translateY(-70%) !important;
+  transform: translateY(calc(-50% - 10px)) !important;
 }
 
 /* 选中状态的卡牌样式 */
@@ -40,10 +70,10 @@
   border-width: 3px;
 }
 
-/* 堆叠状态的卡牌选中时位移更多 */
+/* 堆叠状态的卡牌选中时 */
 .hand-card-wrapper.stacked.selected,
 .hand-card-wrapper.stacked[data-selected="true"] {
-  transform: translateY(-75%) !important;
+  transform: translateY(calc(-50% - 10px)) !important;
 }
 
 /* 堆叠时的小号牌名 */
@@ -70,7 +100,7 @@
 }
 
 .hand-card-wrapper.disabled:hover {
-  transform: translateY(-50%);
+  transform: translateY(-50%) !important;
 }
 
 .hand-card-wrapper.invalid {
@@ -79,5 +109,5 @@
 }
 
 .hand-card-wrapper.invalid:hover {
-  transform: translateY(-50%);
+  transform: translateY(-50%) !important;
 }

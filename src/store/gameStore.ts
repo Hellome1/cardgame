@@ -227,13 +227,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   selectCard: (cardId: string | null) => {
-    const { gameState, selectedCardId } = get();
+    const { gameState, selectedCardId, selectedTargetIds } = get();
     if (gameState) {
       const currentPlayer = gameState.players[gameState.currentPlayerIndex];
       if (cardId) {
         const selectedCard = currentPlayer.handCards.find(c => c.id === cardId);
         if (selectedCard) {
           console.log(`玩家 ${currentPlayer.character.name} 选择了手牌: 【${selectedCard.name}】[${selectedCard.suit}${selectedCard.number}]`);
+        }
+        // 如果切换了手牌（选择了不同的牌），清空之前选择的目标
+        if (selectedCardId && selectedCardId !== cardId && selectedTargetIds.length > 0) {
+          console.log('切换手牌，清空之前选择的目标');
+          set({ selectedTargetIds: [] });
         }
       } else if (selectedCardId) {
         // 取消选择时记录

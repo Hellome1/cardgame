@@ -1,0 +1,935 @@
+/* 武将牌容器 */
+.general-card-container {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* AI玩家的容器布局 */
+.general-card-container.ai-player {
+  align-items: center;
+}
+
+/* 人类玩家的容器布局 */
+.general-card-container.human-player {
+  align-items: center;
+}
+
+/* 武将牌包装器 */
+.general-card-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  position: relative;
+}
+
+/* 武将牌主体 */
+.general-card {
+  width: 140px;
+  height: 180px;
+  min-width: 140px;
+  min-height: 180px;
+  max-width: 140px;
+  max-height: 180px;
+  padding: 0;
+  background: linear-gradient(135deg, #4a4a4a 0%, #2c2c2c 100%);
+  border: 2px solid #666;
+  border-radius: 10px;
+  color: white;
+  text-align: center;
+  cursor: default;
+  transition: all 0.2s ease;
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: flex-start;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.general-card:hover {
+  border-color: #999;
+}
+
+.general-card.current-turn {
+  border-color: #ffd700;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.general-card.selected {
+  border-color: #00ff00;
+  border-width: 4px;
+  box-shadow:
+    0 0 20px rgba(0, 255, 0, 1),
+    0 0 40px rgba(0, 255, 0, 0.8),
+    0 0 60px rgba(0, 255, 0, 0.6),
+    inset 0 0 20px rgba(0, 255, 0, 0.3);
+  transform: scale(1.1);
+  animation: selected-pulse 0.8s infinite;
+  z-index: 100;
+}
+
+@keyframes selected-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 20px rgba(0, 255, 0, 1),
+      0 0 40px rgba(0, 255, 0, 0.8),
+      0 0 60px rgba(0, 255, 0, 0.6),
+      inset 0 0 20px rgba(0, 255, 0, 0.3);
+    transform: scale(1.1);
+  }
+  50% {
+    box-shadow:
+      0 0 30px rgba(0, 255, 0, 1),
+      0 0 60px rgba(0, 255, 0, 0.9),
+      0 0 90px rgba(0, 255, 0, 0.7),
+      inset 0 0 30px rgba(0, 255, 0, 0.5);
+    transform: scale(1.15);
+  }
+}
+
+.general-card.dead {
+  opacity: 0.5;
+  filter: grayscale(100%);
+}
+
+.general-card.human {
+  border-color: #2196f3;
+}
+
+.general-card.selectable {
+  border-color: #00bcd4;
+  box-shadow: 0 0 8px rgba(0, 188, 212, 0.4);
+  animation: pulse 1.5s infinite;
+  cursor: pointer;
+}
+
+.general-card.unselectable {
+  opacity: 0.4;
+  filter: grayscale(80%);
+  cursor: not-allowed;
+  border-color: #444;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 5px rgba(0, 188, 212, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(0, 188, 212, 0.7);
+  }
+  100% {
+    box-shadow: 0 0 5px rgba(0, 188, 212, 0.4);
+  }
+}
+
+/* ========== 手牌打出区 ========== */
+.played-cards-zone {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  position: absolute;
+  width: 100%;
+  pointer-events: none;
+}
+
+/* 人类玩家的手牌打出区 - 在手牌区上方（武将牌右侧） */
+.human-played {
+  top: -110px;
+  left: 260px;
+  width: 400px;
+  height: 70px;
+}
+
+/* AI玩家的手牌打出区 - 在武将牌下方 */
+.ai-played {
+  top: 100%;
+  margin-top: 4px;
+  height: 50px;
+}
+
+/* 统一的打出牌样式 */
+.played-card-mini {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: scale(0.5);
+  transform-origin: top center;
+  animation: playedCardMiniAppear 0.3s ease-out;
+}
+
+@keyframes playedCardMiniAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scale(0.5);
+  }
+}
+
+.played-card-mini .card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ========== AI展示牌区（火攻展示、使用的牌等） ========== */
+.ai-shown-cards-zone {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 8px;
+  height: 60px;
+  width: 200px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.ai-shown-card-mini {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  margin-left: -40px;
+  transform: scale(0.5);
+  transform-origin: top center;
+  animation: shownCardAppear 0.3s ease-out;
+}
+
+@keyframes shownCardAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scale(0.5);
+  }
+}
+
+.ai-shown-card-mini .card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ========== AI手牌区 ========== */
+.ai-hand-cards-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: absolute;
+  right: -50px;
+  bottom: 20px;
+  z-index: 10;
+}
+
+.ai-hand-cards-toggle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+  border: 1px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.ai-hand-cards-toggle:hover {
+  background: linear-gradient(135deg, #4a4a4a 0%, #3a3a3a 100%);
+  border-color: #777;
+}
+
+.ai-hand-cards-count {
+  font-size: 12px;
+  font-weight: bold;
+  color: #ffd700;
+  min-width: 16px;
+  text-align: center;
+}
+
+.ai-hand-cards-icon {
+  font-size: 10px;
+  color: #aaa;
+}
+
+.ai-hand-cards-content {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 4px;
+  z-index: 20;
+}
+
+.ai-hand-cards-content.expanded {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  transform: none;
+  margin-top: 4px;
+}
+
+/* AI手牌折叠状态 */
+.ai-hand-cards-folded {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 4px;
+}
+
+.ai-hand-cards-folded-count {
+  font-size: 11px;
+  color: #ccc;
+}
+
+/* AI手牌展开状态 - 牌背 */
+.ai-hand-cards-back {
+  display: flex;
+  flex-direction: row;
+  position: relative;
+  height: 60px;
+  width: 120px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 6px;
+}
+
+.ai-card-back {
+  width: 40px;
+  height: 56px;
+  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+  border: 2px solid #1a1a2e;
+  border-radius: 4px;
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.ai-card-back::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+  border-radius: 50%;
+  opacity: 0.3;
+}
+
+.ai-card-back.folded {
+  position: relative;
+  top: 0;
+  left: 0;
+  width: 24px;
+  height: 34px;
+}
+
+.ai-hand-cards-more {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  font-size: 10px;
+  color: #ffd700;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+/* ========== 原有样式 ========== */
+
+/* 中央区域 - 头像和手牌（在整个武将牌中居中） */
+.player-center-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+/* 右侧边栏 */
+.player-sidebar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 4px 2px 4px 0;
+  box-sizing: border-box;
+  z-index: 2;
+}
+
+/* 判定区 - 武将牌上方外部 */
+.delayed-spells-area {
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  z-index: 3;
+}
+
+.delayed-spell-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: help;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.delayed-spell-icon.indulgence {
+  background: linear-gradient(135deg, #e91e63 0%, #c2185b 100%);
+}
+
+.delayed-spell-icon.supply-shortage {
+  background: linear-gradient(135deg, #795548 0%, #5d4037 100%);
+}
+
+.delayed-spell-icon.lightning {
+  background: linear-gradient(135deg, #ffeb3b 0%, #fbc02d 100%);
+}
+
+/* 左上角 - 武将名称（纵向排列） */
+.player-name-vertical {
+  position: absolute;
+  top: 8px;
+  left: 0px;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  font-size: 14px;
+  font-weight: bold;
+  color: white;
+  letter-spacing: 2px;
+  z-index: 2;
+}
+
+.lord-badge {
+  font-size: 10px;
+  color: #ffd700;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 1px 2px;
+  border-radius: 3px;
+  margin-top: 2px;
+}
+
+/* 右侧边栏 - 身份（纵向排列） */
+.player-identity-vertical {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  font-size: 12px;
+  letter-spacing: 0px;
+  margin-right: 0px;
+}
+
+/* 中央 - 头像 */
+.avatar-image {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #666 0%, #444 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  position: relative;
+  margin-bottom: 2px;
+  margin-top: -25px;
+}
+
+.avatar-image.lord-avatar {
+  background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.lord-crown {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  font-size: 14px;
+}
+
+/* 手牌数量 */
+.player-cards {
+  font-size: 11px;
+  color: #ccc;
+  margin-bottom: 2px;
+}
+
+/* 右侧边栏 - 体力（纵向排列） */
+.player-hp-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-right: 0px;
+}
+
+.hp-heart {
+  color: #f44336;
+  font-size: 12px;
+  line-height: 12px;
+}
+
+.hp-heart.lost {
+  color: #666;
+}
+
+/* 装备区 - 三排：武器、防具、马匹 */
+.player-equipment {
+  position: absolute;
+  bottom: 4px;
+  left: 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 70px;
+  z-index: 2;
+}
+
+/* 装备项样式 */
+.equipment-item {
+  font-size: 8px;
+  padding: 1px 3px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+  height: 18px;
+  line-height: 16px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.equipment-icon {
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.equipment-name {
+  flex-shrink: 0;
+}
+
+.equipment-range {
+  color: #ffeb3b;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.equipment-suit {
+  font-size: 7px;
+  opacity: 0.9;
+  flex-shrink: 0;
+}
+
+.equipment-slot {
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+}
+
+/* 马匹槽位 - 允许覆盖 */
+.horses-slot {
+  display: flex;
+  flex-direction: row;
+  position: relative;
+  height: 18px;
+}
+
+.horses-slot .equipment-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* +1马（防御马）在底层 */
+.horses-slot .horse-plus {
+  z-index: 1;
+}
+
+/* -1马（进攻马）在上层，覆盖+1马 */
+.horses-slot .horse-minus {
+  z-index: 2;
+  width: 60%;
+  right: 0;
+  left: auto;
+  border-radius: 3px 0 0 3px;
+}
+
+.horses-slot .equipment-placeholder {
+  position: static;
+  width: 100%;
+}
+
+.equipment-placeholder {
+  background: transparent;
+}
+
+.equipment-item.weapon {
+  background: rgba(255, 152, 0, 0.3);
+  border-left: 2px solid #ff9800;
+}
+
+.equipment-item.armor {
+  background: rgba(33, 150, 243, 0.3);
+  border-left: 2px solid #2196f3;
+}
+
+.equipment-item.horse {
+  background: rgba(76, 175, 80, 0.3);
+  border-left: 2px solid #4caf50;
+}
+
+.identity-lord {
+  color: #ffd700;
+}
+
+.identity-loyalist {
+  color: #4caf50;
+}
+
+.identity-rebel {
+  color: #f44336;
+}
+
+.identity-traitor {
+  color: #9c27b0;
+}
+
+/* 技能区 - 武将牌左边外面，下边对齐 */
+.player-skills-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-right: 6px;
+  margin-bottom: 4px;
+  z-index: 10;
+}
+
+/* 左边技能项样式 */
+.skill-item-left {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.2s ease;
+  position: relative;
+  min-width: 50px;
+  text-align: center;
+}
+
+/* 主动技能 - 可点击的高亮按钮样式 */
+.skill-item-left.active {
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  border: 2px solid #ffd700;
+  color: #fff;
+  cursor: pointer;
+  box-shadow:
+    0 0 10px rgba(255, 215, 0, 0.6),
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  font-weight: bold;
+  animation: active-skill-glow 2s ease-in-out infinite;
+}
+
+@keyframes active-skill-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 10px rgba(255, 215, 0, 0.6),
+      0 2px 4px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+  50% {
+    box-shadow:
+      0 0 20px rgba(255, 215, 0, 0.9),
+      0 4px 8px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  }
+}
+
+.skill-item-left.active:hover {
+  transform: scale(1.08);
+  box-shadow:
+    0 0 25px rgba(255, 215, 0, 0.9),
+    0 6px 12px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  background: linear-gradient(135deg, #ff7b45 0%, #ffa32e 100%);
+}
+
+.skill-item-left.active:active {
+  transform: scale(0.98);
+  box-shadow:
+    0 0 15px rgba(255, 215, 0, 0.7),
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.skill-item-left.active.selected {
+  box-shadow:
+    0 0 20px rgba(255, 215, 0, 1),
+    0 4px 8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  border-color: #fff;
+  background: linear-gradient(135deg, #ff8b55 0%, #ffb33e 100%);
+}
+
+/* 被动技能 - 灰色透明背景，无法点击 */
+.skill-item-left.passive {
+  background: rgba(128, 128, 128, 0.15);
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  color: rgba(200, 200, 200, 0.7);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.skill-item-left.passive .skill-name-left {
+  font-weight: normal;
+}
+
+.skill-name-left {
+  font-weight: bold;
+}
+
+/* 左边技能详细描述弹窗 */
+.skill-tooltip-left {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background: rgba(0, 0, 0, 0.95);
+  border: 1px solid #666;
+  border-radius: 6px;
+  padding: 8px 12px;
+  min-width: 200px;
+  max-width: 250px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  margin-bottom: 8px;
+  pointer-events: none;
+}
+
+.skill-tooltip-left .skill-tooltip-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #ffd700;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #666;
+  padding-bottom: 4px;
+}
+
+.skill-tooltip-left .skill-tooltip-desc {
+  font-size: 12px;
+  color: #fff;
+  line-height: 1.5;
+  white-space: normal;
+}
+
+/* 技能详情弹窗 - 双击武将牌显示 */
+.skill-detail-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.skill-detail-modal-content {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 2px solid #4a4a6a;
+  border-radius: 12px;
+  width: 400px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.skill-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #4a4a6a;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px 12px 0 0;
+}
+
+.skill-detail-character-name {
+  margin: 0;
+  color: #ffd700;
+  font-size: 20px;
+  font-weight: bold;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.skill-detail-close-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.skill-detail-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ff6b6b;
+}
+
+.skill-detail-body {
+  padding: 20px;
+  overflow-y: auto;
+  max-height: 60vh;
+}
+
+.skill-detail-section {
+  margin-bottom: 20px;
+}
+
+.skill-detail-section-title {
+  color: #4caf50;
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.skill-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skill-detail-item {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 12px 16px;
+  border-left: 4px solid;
+  transition: all 0.2s;
+}
+
+.skill-detail-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.skill-detail-item.active {
+  border-left-color: #ff9800;
+  background: rgba(255, 152, 0, 0.1);
+}
+
+.skill-detail-item.passive {
+  border-left-color: #9e9e9e;
+  background: rgba(158, 158, 158, 0.1);
+}
+
+.skill-detail-name {
+  font-size: 16px;
+  font-weight: bold;
+  color: #fff;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.skill-detail-type {
+  font-size: 12px;
+  font-weight: normal;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.skill-detail-item.active .skill-detail-type {
+  background: rgba(255, 152, 0, 0.3);
+  color: #ff9800;
+}
+
+.skill-detail-item.passive .skill-detail-type {
+  background: rgba(158, 158, 158, 0.3);
+  color: #bdbdbd;
+}
+
+.skill-detail-description {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.6;
+}
+
+.skill-detail-empty {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  text-align: center;
+  padding: 20px;
+  font-style: italic;
+}
