@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { GameState, GameAction, GamePhase, ResponseType, SpellCardName, CardType, BasicCardName } from '../types/game';
 import { GameEngine } from '../game/GameEngine';
-import { SkillManager } from '../game/SkillManager';
 
 // 模块级别的标志，确保 initGame 只执行一次
 let hasInitialized = false;
@@ -60,7 +59,6 @@ interface GameStore {
   handleTimeout: () => void;  // 处理超时
   pauseGame: () => void;  // 暂停游戏
   resumeGame: () => void;  // 恢复游戏
-  executeSkill: (skillId: string, targetId?: string) => void;  // 执行技能
   handleDyingResponse: (cardType: 'peach' | 'wine') => boolean;  // 处理濒死阶段响应
   giveUpDying: () => boolean;  // 玩家放弃自救（死亡）
   endGame: (showDebug?: boolean) => void;  // 结束游戏，返回主菜单，可选是否直接显示调试界面
@@ -644,79 +642,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
         }
       }
     }
-  },
-
-  // 执行技能
-  executeSkill: (skillId: string, targetId?: string) => {
-    const { engine, gameState, logs } = get();
-    if (!engine || !gameState) return;
-
-    // 从引擎获取原始游戏状态（包含完整的技能对象）
-    const rawGameState = engine.getState();
-    const currentPlayer = rawGameState.players[rawGameState.currentPlayerIndex];
-    const humanPlayer = rawGameState.players[0];
-
-    // 只能在自己的回合执行主动技能
-    if (currentPlayer.id !== humanPlayer.id) {
-      console.log('不是自己的回合，无法使用技能');
-      return;
-    }
-
-    // 找到技能（从原始状态中获取，确保execute方法存在）
-    const skill = currentPlayer.character.skills.find(s => s.id === skillId);
-    if (!skill) {
-      console.log(`技能 ${skillId} 不存在`);
-      return;
-    }
-
-    // 检查是否是主动技能
-    if (skill.isPassive) {
-      console.log(`${skill.name} 是被动技能，无法主动使用`);
-      return;
-    }
-
-    // 构建技能上下文
-    const target = targetId ? rawGameState.players.find(p => p.id === targetId) : undefined;
-    const skillContext = {
-      player: currentPlayer,
-      game: rawGameState,
-      engine,
-      target,
-    };
-
-    // 执行技能
-    try {
-      // 优先使用技能对象的execute方法
-      if (typeof skill.execute === 'function') {
-        skill.execute(skillContext);
-        console.log(`技能执行成功: ${skill.name}`);
-      } else {
-        // 如果没有execute方法，使用SkillManager的类型安全方法
-        console.log(`技能 ${skill.name} 没有execute方法，使用SkillManager执行`);
-        const success = SkillManager.executeSkillById(skillId, skillContext);
-        if (!success) {
-          console.error(`无法执行技能 ${skill.name}：SkillManager中没有对应的技能执行器`);
-          return;
-        }
-      }
-    } catch (error) {
-      console.error(`执行技能 ${skill.name} 时出错:`, error);
-      return;
-    }
-
-    // 强制创建新的游戏状态引用，确保React检测到变化
-    const newGameState = engine.getState();
-    const clonedState = JSON.parse(JSON.stringify(newGameState));
-
-    set({
-      gameState: clonedState,
-      logs: [`${currentPlayer.character.name} 使用【${skill.name}】`, ...logs].slice(0, 50),
-    });
-
-    // 技能发动后刷新计时器（重置为第四条）
-    get().refreshTimer();
-
-    console.log(`[executeSkill] 游戏状态已更新，${currentPlayer.character.name} 当前手牌数: ${clonedState.players[0].handCards.length}`);
   },
 
   // 处理濒死阶段响应（使用桃或酒）

@@ -147,7 +147,6 @@ export interface Character {
   gender: Gender;
   maxHp: number;
   hp: number;
-  skills: Skill[];
   avatar: string;
 }
 

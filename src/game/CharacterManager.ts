@@ -1,103 +1,4 @@
-import { Character, Kingdom, Gender, SkillTrigger, SkillContext, SkillResult } from '../types/game';
-import { SkillManager } from './SkillManager';
-
-// 新版技能系统导入
-import {
-  SkillRegistry,
-  JianXiongSkill,
-  FanKuiSkill,
-  GuiCaiSkill,
-  GangLieSkill,
-  TuXiSkill,
-  RenDeSkill,
-  WuShengSkill,
-  PaoXiaoSkill,
-  GuanXingSkill,
-  KongChengSkill,
-  LongDanSkill,
-  TieJiSkill,
-  ZhiHengSkill,
-  YingZiSkill,
-  FanJianSkill,
-  KeJiSkill,
-  KuRouSkill,
-  GuoSeSkill,
-  LiuLiSkill,
-  XiaoJiSkill,
-  QianXunSkill,
-  LianYingSkill,
-  WuShuangSkill,
-  JiJiuSkill,
-  QingNangSkill,
-  LiJianSkill,
-  BiYueSkill,
-  LuanJiSkill,
-  JiuChiSkill,
-  WanShaSkill,
-  LuanWuSkill,
-} from '../skills';
-
-// 技能类映射表
-const skillClassMap: Record<string, new () => any> = {
-  jianxiong: JianXiongSkill,
-  fankui: FanKuiSkill,
-  guicai: GuiCaiSkill,
-  ganglie: GangLieSkill,
-  tuxi: TuXiSkill,
-  rende: RenDeSkill,
-  wusheng: WuShengSkill,
-  paoxiao: PaoXiaoSkill,
-  guanxing: GuanXingSkill,
-  kongcheng: KongChengSkill,
-  longdan: LongDanSkill,
-  tieji: TieJiSkill,
-  zhiheng: ZhiHengSkill,
-  yingzi: YingZiSkill,
-  fanjian: FanJianSkill,
-  keji: KeJiSkill,
-  kurou: KuRouSkill,
-  guose: GuoSeSkill,
-  liuli: LiuLiSkill,
-  xiaoji: XiaoJiSkill,
-  qianxun: QianXunSkill,
-  lianying: LianYingSkill,
-  wushuang: WuShuangSkill,
-  jijiu: JiJiuSkill,
-  qingnang: QingNangSkill,
-  lijian: LiJianSkill,
-  biyue: BiYueSkill,
-  luanji: LuanJiSkill,
-  jiuchi: JiuChiSkill,
-  wansha: WanShaSkill,
-  luanwu: LuanWuSkill,
-};
-
-// 武将技能映射表：武将ID -> 技能ID数组
-const characterSkillMap: Record<string, string[]> = {
-  caocao: ['jianxiong'],
-  simayi: ['fankui', 'guicai'],
-  xiahoudun: ['ganglie'],
-  zhangliao: ['tuxi'],
-  liubei: ['rende'],
-  guanyu: ['wusheng'],
-  zhangfei: ['paoxiao'],
-  zhugeliang: ['guanxing', 'kongcheng'],
-  zhaoyun: ['longdan'],
-  machao: ['tieji'],
-  sunquan: ['zhiheng'],
-  zhouyu: ['yingzi', 'fanjian'],
-  lumeng: ['keji'],
-  huanggai: ['kurou'],
-  daqiao: ['guose', 'liuli'],
-  sunshangxiang: ['xiaoji'],
-  luxun: ['qianxun', 'lianying'],
-  lvbu: ['wushuang'],
-  huatuo: ['jijiu', 'qingnang'],
-  diaochan: ['lijian', 'biyue'],
-  yuanshao: ['luanji'],
-  dongzhuo: ['jiuchi'],
-  jiaxu: ['wansha', 'luanwu'],
-};
+import { Character, Kingdom, Gender } from '../types/game';
 
 export class CharacterManager {
   private static instance: CharacterManager;
@@ -111,50 +12,6 @@ export class CharacterManager {
     return CharacterManager.instance;
   }
 
-  /**
-   * 根据场上武将注册技能（游戏开始时调用）
-   * @param characterIds 场上武将ID列表
-   */
-  registerSkillsForCharacters(characterIds: string[]): void {
-    const registry = SkillRegistry.getInstance();
-    const registeredSkills = new Set<string>();
-
-    console.log('根据场上武将注册技能:', characterIds);
-
-    for (const characterId of characterIds) {
-      const skillIds = characterSkillMap[characterId];
-      if (skillIds) {
-        for (const skillId of skillIds) {
-          const skillClass = skillClassMap[skillId];
-          if (skillClass && !registeredSkills.has(skillId)) {
-            registry.register(skillClass);
-            registeredSkills.add(skillId);
-            console.log(`注册技能: ${skillId}`);
-          }
-        }
-      }
-    }
-
-    console.log(`技能注册完成，共注册 ${registeredSkills.size} 个技能`);
-  }
-
-  /**
-   * 重置技能注册状态（用于重新开始游戏）
-   */
-  resetSkillRegistration(): void {
-    const registry = SkillRegistry.getInstance();
-    registry.clear();
-    console.log('技能注册状态已重置');
-  }
-
-  /**
-   * 获取武将的技能ID列表
-   * @param characterId 武将ID
-   */
-  getCharacterSkillIds(characterId: string): string[] {
-    return characterSkillMap[characterId] || [];
-  }
-
   private initCharacters() {
     // 魏国武将
     this.addCharacter({
@@ -164,20 +21,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 4,
       hp: 4,
-      skills: [
-        {
-          id: 'jianxiong',
-          name: '奸雄',
-          description: '当你受到伤害后，你可以获得对你造成伤害的牌，并摸一张牌。',
-          trigger: SkillTrigger.ON_DAMAGE,
-          isPassive: false,
-          skillClassName: 'jianxiong',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.jianxiong(context);
-            return { success: true, message: '【奸雄】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/caocao.png',
     });
 
@@ -188,51 +31,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 3,
       hp: 3,
-      skills: [
-        {
-          id: 'fankui',
-          name: '反馈',
-          description: '当你受到伤害后，你可以获得伤害来源的一张牌。',
-          trigger: SkillTrigger.ON_DAMAGE,
-          isPassive: true,
-          skillClassName: 'fankui',
-          execute: (context: SkillContext): SkillResult => {
-            const { player, source } = context;
-
-            if (source && source.handCards.length > 0) {
-              // 随机获得伤害来源一张手牌
-              const randomIndex = Math.floor(Math.random() * source.handCards.length);
-              const stolenCard = source.handCards.splice(randomIndex, 1)[0];
-              player.handCards.push(stolenCard);
-
-              console.log(`${player.character.name} 【反馈】获得 ${source.character.name} 的 ${stolenCard.name}`);
-
-              return {
-                success: true,
-                message: `${player.character.name} 发动【反馈】，获得${source.character.name}的${stolenCard.name}`,
-                affectedTargets: [source],
-              };
-            }
-
-            return {
-              success: false,
-              message: '伤害来源没有手牌',
-            };
-          },
-        },
-        {
-          id: 'guicai',
-          name: '鬼才',
-          description: '当一名角色的判定牌生效前，你可以打出一张手牌代替之。',
-          trigger: SkillTrigger.BEFORE_PLAY,
-          isPassive: true,
-          skillClassName: 'guicai',
-          execute: () => {
-            // TODO: 实现判定牌替换逻辑
-            console.log('【鬼才】技能待实现');
-          },
-        },
-      ],
       avatar: '/avatars/simayi.png',
     });
 
@@ -243,20 +41,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 4,
       hp: 4,
-      skills: [
-        {
-          id: 'ganglie',
-          name: '刚烈',
-          description: '当你受到伤害后，你可以进行判定，若结果不为红桃，伤害来源弃置两张手牌或受到1点伤害。',
-          trigger: SkillTrigger.ON_DAMAGE,
-          isPassive: false,
-          skillClassName: 'ganglie',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.ganglie(context);
-            return { success: true, message: '【刚烈】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/xiahoudun.png',
     });
 
@@ -267,20 +51,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 4,
       hp: 4,
-      skills: [
-        {
-          id: 'tuxi',
-          name: '突袭',
-          description: '摸牌阶段，你可以改为获得至多两名其他角色各一张手牌。',
-          trigger: SkillTrigger.ON_DRAW,
-          isPassive: false,
-          skillClassName: 'tuxi',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.tuxi(context);
-            return { success: true, message: '【突袭】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/zhangliao.png',
     });
 
@@ -292,20 +62,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 4,
       hp: 4,
-      skills: [
-        {
-          id: 'rende',
-          name: '仁德',
-          description: '出牌阶段，你可以将任意张手牌交给其他角色，然后你回复1点体力。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: false,
-          skillClassName: 'rende',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.rende(context);
-            return { success: true, message: '【仁德】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/liubei.png',
     });
 
@@ -316,20 +72,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 4,
       hp: 4,
-      skills: [
-        {
-          id: 'wusheng',
-          name: '武圣',
-          description: '你可以将一张红色牌当【杀】使用或打出。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: false,
-          skillClassName: 'wusheng',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.wusheng(context);
-            return { success: true, message: '【武圣】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/guanyu.png',
     });
 
@@ -340,19 +82,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 4,
       hp: 4,
-      skills: [
-        {
-          id: 'paoxiao',
-          name: '咆哮',
-          description: '锁定技，出牌阶段，你使用【杀】无次数限制。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: true,
-          skillClassName: 'paoxiao',
-          execute: () => {
-            // 被动技能，在GameEngine中处理
-          },
-        },
-      ],
       avatar: '/avatars/zhangfei.png',
     });
 
@@ -363,31 +92,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 3,
       hp: 3,
-      skills: [
-        {
-          id: 'guanxing',
-          name: '观星',
-          description: '准备阶段，你可以观看牌堆顶的X张牌（X为存活角色数且至多为5），然后将这些牌以任意顺序置于牌堆顶或牌堆底。',
-          trigger: SkillTrigger.TURN_START,
-          isPassive: false,
-          skillClassName: 'guanxing',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.guanxing(context);
-            return { success: true, message: '【观星】技能触发' };
-          },
-        },
-        {
-          id: 'kongcheng',
-          name: '空城',
-          description: '锁定技，若你没有手牌，你不能成为【杀】或【决斗】的目标。',
-          trigger: SkillTrigger.ON_ATTACKED,
-          isPassive: true,
-          skillClassName: 'kongcheng',
-          execute: () => {
-            // 被动技能，在GameEngine中处理
-          },
-        },
-      ],
       avatar: '/avatars/zhugeliang.png',
     });
 
@@ -398,20 +102,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 4,
       hp: 4,
-      skills: [
-        {
-          id: 'longdan',
-          name: '龙胆',
-          description: '你可以将一张【杀】当【闪】使用或打出，或将一张【闪】当【杀】使用或打出。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: false,
-          skillClassName: 'longdan',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.longdan(context);
-            return { success: true, message: '【龙胆】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/zhaoyun.png',
     });
 
@@ -422,20 +112,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 4,
       hp: 4,
-      skills: [
-        {
-          id: 'tieji',
-          name: '铁骑',
-          description: '当你使用【杀】指定目标后，你可以进行判定，若结果为红色，该角色不能使用【闪】响应此【杀】。',
-          trigger: SkillTrigger.ON_ATTACKED,
-          isPassive: false,
-          skillClassName: 'tieji',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.tieji(context);
-            return { success: true, message: '【铁骑】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/machao.png',
     });
 
@@ -447,20 +123,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 4,
       hp: 4,
-      skills: [
-        {
-          id: 'zhiheng',
-          name: '制衡',
-          description: '出牌阶段限一次，你可以弃置任意张牌，然后摸等量的牌。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: false,
-          skillClassName: 'zhiheng',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.zhiheng(context);
-            return { success: true, message: '【制衡】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/sunquan.png',
     });
 
@@ -471,32 +133,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 3,
       hp: 3,
-      skills: [
-        {
-          id: 'yingzi',
-          name: '英姿',
-          description: '摸牌阶段，你可以多摸一张牌。',
-          trigger: SkillTrigger.ON_DRAW,
-          isPassive: true,
-          skillClassName: 'yingzi',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.yingzi(context);
-            return { success: true, message: '【英姿】技能触发' };
-          },
-        },
-        {
-          id: 'fanjian',
-          name: '反间',
-          description: '出牌阶段限一次，你可以展示一张手牌并交给一名其他角色，其选择一项：1.展示所有手牌并弃置与此牌同花色的牌；2.失去1点体力。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: false,
-          skillClassName: 'fanjian',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.fanjian(context);
-            return { success: true, message: '【反间】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/zhouyu.png',
     });
 
@@ -507,19 +143,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 4,
       hp: 4,
-      skills: [
-        {
-          id: 'keji',
-          name: '克己',
-          description: '若你于出牌阶段未使用或打出过【杀】，你可以跳过弃牌阶段。',
-          trigger: SkillTrigger.ON_DISCARD,
-          isPassive: true,
-          skillClassName: 'keji',
-          execute: () => {
-            // 被动技能，在GameEngine中处理
-          },
-        },
-      ],
       avatar: '/avatars/lumeng.png',
     });
 
@@ -530,20 +153,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 4,
       hp: 4,
-      skills: [
-        {
-          id: 'kurou',
-          name: '苦肉',
-          description: '出牌阶段，你可以失去1点体力，然后摸两张牌。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: false,
-          skillClassName: 'kurou',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.kurou(context);
-            return { success: true, message: '【苦肉】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/huanggai.png',
     });
 
@@ -554,32 +163,6 @@ export class CharacterManager {
       gender: Gender.FEMALE,
       maxHp: 3,
       hp: 3,
-      skills: [
-        {
-          id: 'guose',
-          name: '国色',
-          description: '你可以将一张方块牌当【乐不思蜀】使用。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: false,
-          skillClassName: 'guose',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.guose(context);
-            return { success: true, message: '【国色】技能触发' };
-          },
-        },
-        {
-          id: 'liuli',
-          name: '流离',
-          description: '当你成为【杀】的目标时，你可以弃置一张牌，将此【杀】转移给你攻击范围内的另一名其他角色。',
-          trigger: SkillTrigger.ON_ATTACKED,
-          isPassive: false,
-          skillClassName: 'liuli',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.liuli(context);
-            return { success: true, message: '【流离】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/daqiao.png',
     });
 
@@ -590,20 +173,6 @@ export class CharacterManager {
       gender: Gender.FEMALE,
       maxHp: 3,
       hp: 3,
-      skills: [
-        {
-          id: 'xiaoji',
-          name: '枭姬',
-          description: '当你失去装备区里的一张牌后，你可以摸两张牌。',
-          trigger: SkillTrigger.ON_DISCARD,
-          isPassive: false,
-          skillClassName: 'xiaoji',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.xiaoji(context);
-            return { success: true, message: '【枭姬】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/sunshangxiang.png',
     });
 
@@ -614,31 +183,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 3,
       hp: 3,
-      skills: [
-        {
-          id: 'qianxun',
-          name: '谦逊',
-          description: '锁定技，你不能成为【顺手牵羊】和【乐不思蜀】的目标。',
-          trigger: SkillTrigger.ON_ATTACKED,
-          isPassive: true,
-          skillClassName: 'qianxun',
-          execute: () => {
-            // 被动技能，在GameEngine中处理
-          },
-        },
-        {
-          id: 'lianying',
-          name: '连营',
-          description: '当你失去最后的手牌后，你可以摸一张牌。',
-          trigger: SkillTrigger.ON_DISCARD,
-          isPassive: false,
-          skillClassName: 'lianying',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.lianying(context);
-            return { success: true, message: '【连营】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/luxun.png',
     });
 
@@ -650,19 +194,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 4,
       hp: 4,
-      skills: [
-        {
-          id: 'wushuang',
-          name: '无双',
-          description: '锁定技，当你使用【杀】指定目标后，该角色需依次使用两张【闪】才能抵消；当你使用【决斗】指定目标后，该角色需依次打出两张【杀】才能响应。',
-          trigger: SkillTrigger.ON_ATTACKED,
-          isPassive: true,
-          skillClassName: 'wushuang',
-          execute: () => {
-            // 被动技能，在GameEngine中处理
-          },
-        },
-      ],
       avatar: '/avatars/lvbu.png',
     });
 
@@ -673,32 +204,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 3,
       hp: 3,
-      skills: [
-        {
-          id: 'jijiu',
-          name: '急救',
-          description: '你的回合外，你可以将一张红色牌当【桃】使用。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: false,
-          skillClassName: 'jijiu',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.jijiu(context);
-            return { success: true, message: '【急救】技能触发' };
-          },
-        },
-        {
-          id: 'qingnang',
-          name: '青囊',
-          description: '出牌阶段限一次，你可以弃置一张手牌，令一名角色回复1点体力。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: false,
-          skillClassName: 'qingnang',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.qingnang(context);
-            return { success: true, message: '【青囊】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/huatuo.png',
     });
 
@@ -709,32 +214,6 @@ export class CharacterManager {
       gender: Gender.FEMALE,
       maxHp: 3,
       hp: 3,
-      skills: [
-        {
-          id: 'lijian',
-          name: '离间',
-          description: '出牌阶段限一次，你可以弃置一张牌，令一名男性角色视为对另一名男性角色使用一张【决斗】。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: false,
-          skillClassName: 'lijian',
-          execute: () => {
-            // TODO: 实现离间技能
-            console.log('离间技能待实现');
-          },
-        },
-        {
-          id: 'biyue',
-          name: '闭月',
-          description: '结束阶段，你可以摸一张牌。',
-          trigger: SkillTrigger.TURN_END,
-          isPassive: false,
-          skillClassName: 'biyue',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.biyue(context);
-            return { success: true, message: '【闭月】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/diaochan.png',
     });
 
@@ -745,20 +224,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 4,
       hp: 4,
-      skills: [
-        {
-          id: 'luanji',
-          name: '乱击',
-          description: '你可以将两张花色相同的手牌当【万箭齐发】使用。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: false,
-          skillClassName: 'luanji',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.luanji(context);
-            return { success: true, message: '【乱击】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/yuanshao.png',
     });
 
@@ -769,20 +234,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 8,
       hp: 8,
-      skills: [
-        {
-          id: 'jiuchi',
-          name: '酒池',
-          description: '你可以将一张黑桃手牌当【酒】使用。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: false,
-          skillClassName: 'jiuchi',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.jiuchi(context);
-            return { success: true, message: '【酒池】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/dongzhuo.png',
     });
 
@@ -793,31 +244,6 @@ export class CharacterManager {
       gender: Gender.MALE,
       maxHp: 3,
       hp: 3,
-      skills: [
-        {
-          id: 'wansha',
-          name: '完杀',
-          description: '锁定技，你的回合内，只有你和处于濒死状态的角色才能使用【桃】。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: true,
-          skillClassName: 'wansha',
-          execute: () => {
-            // 被动技能，在GameEngine中处理
-          },
-        },
-        {
-          id: 'luanwu',
-          name: '乱武',
-          description: '限定技，出牌阶段，你可以令所有其他角色依次选择一项：1.对距离最近的另一名角色使用一张【杀】；2.失去1点体力。',
-          trigger: SkillTrigger.PLAY,
-          isPassive: false,
-          skillClassName: 'luanwu',
-          execute: (context: SkillContext): SkillResult => {
-            SkillManager.luanwu(context);
-            return { success: true, message: '【乱武】技能触发' };
-          },
-        },
-      ],
       avatar: '/avatars/jiaxu.png',
     });
   }
@@ -838,14 +264,5 @@ export class CharacterManager {
     const all = this.getAllCharacters();
     const shuffled = [...all].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, count);
-  }
-
-  /**
-   * 根据技能ID获取新版技能实例
-   * @param skillId 技能ID
-   */
-  getSkillInstance(skillId: string) {
-    const registry = SkillRegistry.getInstance();
-    return registry.getSkill(skillId);
   }
 }

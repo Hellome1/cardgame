@@ -568,18 +568,10 @@ const CharacterCard: React.FC<CharacterCardProps> = ({ character, isSelected, on
       className={`char-card ${isSelected ? 'selected' : ''}`}
       onClick={onClick}
       style={{ borderColor: kingdomBorderColors[character.kingdom] || kingdomBorderColors['群'] }}
-      title={character.skills.map(s => s.name).join(' ')}
+      title={character.name}
     >
       <div className="char-card-name">{character.name}</div>
       <div className="char-card-hp">{'♥'.repeat(character.maxHp)}</div>
-      <div className="char-card-skills">
-        {character.skills.slice(0, 2).map(skill => (
-          <span key={skill.id} className={`skill-tag ${skill.isPassive ? 'passive' : 'active'}`}>
-            {skill.name}
-          </span>
-        ))}
-        {character.skills.length > 2 && <span className="more-skills">+{character.skills.length - 2}</span>}
-      </div>
       {isSelected && <div className="selected-mark">✓</div>}
     </div>
   );

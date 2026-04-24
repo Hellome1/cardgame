@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Player, Identity, SpellCardName, GamePhase, Card as CardType } from '../../types/game';
 import { Card } from '../Card/Card';
 import './GeneralCard.css';
@@ -14,7 +14,6 @@ interface GeneralCardProps {
   isUnselectable?: boolean;
   onClick?: () => void;
   setRef?: (el: HTMLElement | null) => void;
-  onSkillUse?: (skillId: string) => void;
   gamePhase?: GamePhase;
   // 手牌打出区
   playedCards?: CardType[];
@@ -22,6 +21,8 @@ interface GeneralCardProps {
   showAIHandCards?: boolean;
   // AI展示牌区（火攻展示、使用的牌等）
   shownCards?: CardType[];
+  // 受伤动画触发
+  isDamaged?: boolean;
 }
 
 export const GeneralCard: React.FC<GeneralCardProps> = ({
@@ -35,15 +36,25 @@ export const GeneralCard: React.FC<GeneralCardProps> = ({
   isUnselectable = false,
   onClick,
   setRef,
-  onSkillUse,
   gamePhase,
   playedCards = [],
   showAIHandCards = true,
   shownCards = [],
+  isDamaged = false,
 }) => {
-  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
-  const [showSkillDetail, setShowSkillDetail] = useState(false);
   const [isHandCardsExpanded, setIsHandCardsExpanded] = useState(false);
+  const [showDamageAnimation, setShowDamageAnimation] = useState(false);
+
+  // 触发受伤动画
+  useEffect(() => {
+    if (isDamaged) {
+      setShowDamageAnimation(true);
+      const timer = setTimeout(() => {
+        setShowDamageAnimation(false);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [isDamaged]);
 
   const getIdentityText = (identity: Identity) => {
     switch (identity) {
@@ -113,36 +124,6 @@ export const GeneralCard: React.FC<GeneralCardProps> = ({
       default:
         return '';
     }
-  };
-
-  // 处理技能点击
-  const handleSkillClick = (skillId: string, e: React.MouseEvent, isPassive: boolean) => {
-    e.stopPropagation();
-    if (!isPassive) {
-      if (gamePhase === GamePhase.PLAY) {
-        if (onSkillUse) {
-          onSkillUse(skillId);
-        }
-      } else {
-        console.log('只能在出牌阶段使用主动技能');
-      }
-    }
-  };
-
-  // 处理技能描述显示
-  const handleSkillHover = (skillId: string | null) => {
-    setSelectedSkill(skillId);
-  };
-
-  // 处理双击武将牌显示技能详情
-  const handleDoubleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowSkillDetail(true);
-  };
-
-  // 关闭技能详情弹窗
-  const handleCloseSkillDetail = () => {
-    setShowSkillDetail(false);
   };
 
   // 渲染手牌打出区 - 只显示最近打出的一张牌
@@ -254,34 +235,15 @@ export const GeneralCard: React.FC<GeneralCardProps> = ({
         {/* AI展示牌区 - 放在武将牌下方（火攻展示、使用的牌等） */}
         {renderAIShownCards()}
 
-        {/* 技能区 - 武将牌左边外面，下边对齐 */}
-        <div className="player-skills-left">
-          {player.character.skills.map((skill) => (
-            <div
-              key={skill.id}
-              className={`skill-item-left ${skill.isPassive ? 'passive' : 'active'}`}
-              onClick={(e) => handleSkillClick(skill.id, e, skill.isPassive)}
-              onMouseEnter={() => handleSkillHover(skill.id)}
-              onMouseLeave={() => handleSkillHover(null)}
-            >
-              <span className="skill-name-left">{skill.name}</span>
-              {/* 技能详细描述弹窗 */}
-              {selectedSkill === skill.id && (
-                <div className="skill-tooltip-left">
-                  <div className="skill-tooltip-title">{skill.name}</div>
-                  <div className="skill-tooltip-desc">{skill.description}</div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
         <div
           ref={setRef}
-          className={`general-card${isCurrentTurn ? ' current-turn' : ''}${isSelected ? ' selected' : ''}${player.isDead ? ' dead' : ''}${isHuman ? ' human' : ''}${isSelectable ? ' selectable' : ''}${isUnselectable ? ' unselectable' : ''}`}
+          className={`general-card${isCurrentTurn ? ' current-turn' : ''}${isSelected ? ' selected' : ''}${player.isDead ? ' dead' : ''}${isHuman ? ' human' : ''}${isSelectable ? ' selectable' : ''}${isUnselectable ? ' unselectable' : ''}${showDamageAnimation ? ' damaged' : ''}`}
           onClick={onClick}
-          onDoubleClick={handleDoubleClick}
         >
+          {/* 受伤动画 - 斜线切割效果 */}
+          {showDamageAnimation && (
+            <div className="damage-slash"></div>
+          )}
           {/* 判定区 - 上方小图标 */}
           <div className="delayed-spells-area">
             {player.delayedSpells.indulgence && (
@@ -381,38 +343,6 @@ export const GeneralCard: React.FC<GeneralCardProps> = ({
           </div>
         </div>
       </div>
-
-      {/* 技能详情弹窗 - 双击武将牌显示 */}
-      {showSkillDetail && (
-        <div className="skill-detail-modal-overlay" onClick={handleCloseSkillDetail}>
-          <div className="skill-detail-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="skill-detail-header">
-              <h3 className="skill-detail-character-name">{player.character.name}</h3>
-              <button className="skill-detail-close-btn" onClick={handleCloseSkillDetail}>✕</button>
-            </div>
-            <div className="skill-detail-body">
-              <div className="skill-detail-section">
-                <h4 className="skill-detail-section-title">武将技能</h4>
-                {player.character.skills.length > 0 ? (
-                  <div className="skill-detail-list">
-                    {player.character.skills.map((skill) => (
-                      <div key={skill.id} className={`skill-detail-item ${skill.isPassive ? 'passive' : 'active'}`}>
-                        <div className="skill-detail-name">
-                          {skill.name}
-                          <span className="skill-detail-type">{skill.isPassive ? '【被动】' : '【主动】'}</span>
-                        </div>
-                        <div className="skill-detail-description">{skill.description}</div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="skill-detail-empty">该武将没有技能</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

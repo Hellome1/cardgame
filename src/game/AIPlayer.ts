@@ -181,9 +181,6 @@ export class AIPlayer {
 
     console.log(`AI ${player.character.name} 开始出牌，当前手牌: ${player.handCards.length}`);
 
-    // 首先尝试使用主动技能
-    await this.useActiveSkills(player);
-
     while (playedCount < maxCardsPerTurn) {
       // 检查游戏是否暂停
       if (this.engine.isGamePaused()) {
@@ -511,64 +508,4 @@ export class AIPlayer {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // AI使用主动技能
-  private async useActiveSkills(player: Player): Promise<void> {
-    const gameState = this.engine.getState();
-    const currentPlayer = gameState.players.find(p => p.id === player.id);
-    if (!currentPlayer || currentPlayer.isDead) return;
-
-    // 获取所有主动技能（非被动技能）
-    const activeSkills = currentPlayer.character.skills.filter(skill => !skill.isPassive);
-
-    console.log(`AI ${currentPlayer.character.name} 检查主动技能，共 ${activeSkills.length} 个`);
-
-    for (const skill of activeSkills) {
-      // 检查游戏是否暂停
-      if (this.engine.isGamePaused()) {
-        await this.delay(500);
-        continue;
-      }
-
-      // 构建技能上下文
-      const skillContext: SkillContext = {
-        player: currentPlayer,
-        game: gameState,
-      };
-
-      // 检查技能是否可以使用（通过检查useLimit）
-      const canUse = this.canUseSkill(skill, currentPlayer);
-      if (canUse) {
-        console.log(`AI ${currentPlayer.character.name} 准备使用技能【${skill.name}】`);
-        try {
-          skill.execute(skillContext);
-          console.log(`AI ${currentPlayer.character.name} 成功使用技能【${skill.name}】`);
-        } catch (error) {
-          console.error(`AI ${currentPlayer.character.name} 使用技能【${skill.name}】失败:`, error);
-        }
-      } else {
-        console.log(`AI ${currentPlayer.character.name} 技能【${skill.name}】当前不可用`);
-      }
-
-      await this.delay(300);
-    }
-  }
-
-  // 检查技能是否可以使用
-  private canUseSkill(skill: { id: string; useLimit?: number }, player: Player): boolean {
-    // 这里可以根据技能ID添加更多检查逻辑
-    switch (skill.id) {
-      case 'zhiheng': // 孙权 - 制衡：需要有手牌
-        return player.handCards.length > 0;
-      case 'rende': // 刘备 - 仁德：需要有手牌且有队友
-        return player.handCards.length > 1;
-      case 'kurou': // 黄盖 - 苦肉：需要体力大于1
-        return player.character.hp > 1;
-      case 'guose': // 大乔 - 国色：需要有方块牌
-        return player.handCards.some(c => c.suit === '♦');
-      case 'jiuchi': // 董卓 - 酒池：需要有黑桃牌
-        return player.handCards.some(c => c.suit === '♠');
-      default:
-        return true;
-    }
-  }
 }

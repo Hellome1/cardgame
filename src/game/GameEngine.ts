@@ -294,9 +294,6 @@ export class GameEngine {
   private initializeGameWithConfig(config: DebugConfig): GameState {
     console.log('使用调试配置初始化游戏');
 
-    // 重置技能注册状态
-    this.characterManager.resetSkillRegistration();
-
     // 创建牌堆
     const deck = this.cardManager.createStandardDeck();
 
@@ -342,10 +339,6 @@ export class GameEngine {
     // 找到主公的索引
     const lordIndex = players.findIndex(p => p.identity === Identity.LORD);
     const startingPlayerIndex = lordIndex >= 0 ? lordIndex : 0;
-
-    // 根据场上武将注册技能
-    const characterIds = config.players.map(p => p.characterId);
-    this.characterManager.registerSkillsForCharacters(characterIds);
 
     // 构建游戏状态（deck 已经被发牌系统修改）
     const gameState: GameState = {
@@ -1980,9 +1973,6 @@ export class GameEngine {
     const damageTypeText = damageType === 'fire' ? '火焰' : damageType === 'thunder' ? '雷电' : '';
     console.log(`${target.character.name} 受到 ${amount} 点${damageTypeText}伤害，剩余体力: ${target.character.hp}`);
 
-    // 触发受伤技能（简化版）
-    this.triggerSkill(target, SkillTrigger.ON_DAMAGE, { fromPlayer, amount, damageType });
-
     // 如果体力降至0或以下，进入濒死阶段
     if (target.character.hp <= 0) {
       console.log(`${target.character.name} 体力降至0或以下，进入濒死阶段`);
@@ -1997,74 +1987,6 @@ export class GameEngine {
     return this.state.phase === GamePhase.GAME_OVER;
   }
 
-  // 触发技能（简化版）
-  private triggerSkill(
-    player: Player,
-    trigger: SkillTrigger,
-    context: {
-      fromPlayer?: Player;
-      amount?: number;
-      damageType?: 'normal' | 'fire' | 'thunder';
-      card?: Card;
-    }
-  ): void {
-    player.character.skills.forEach(skill => {
-      if (skill.trigger === trigger) {
-        console.log(`${player.character.name} 触发了技能 ${skill.name}`);
-
-        // 构建技能上下文
-        const skillContext: SkillContext = {
-          player,
-          game: this.state,
-          engine: this,
-          target: context.fromPlayer,
-          card: context.card,
-          source: context.fromPlayer,
-          damage: context.amount,
-          damageType: context.damageType,
-        };
-
-        // 执行技能
-        try {
-          const result = skill.execute(skillContext);
-
-          // 如果技能执行成功且有消息，通知前端显示提示
-          if (result.success && result.message) {
-            this.actionListeners.forEach(listener => listener({
-              action: GameAction.USE_SKILL,
-              playerId: player.id,
-              skillId: skill.id,
-              targetIds: result.affectedTargets?.map(t => t.id),
-              logMessage: result.message,
-              isEffectResult: true,
-            }));
-
-            // 如果是反馈技能，额外触发SKILL_STEAL_CARD动作用于动画
-            if (skill.id === 'fankui' && context.fromPlayer) {
-              const fromPlayer = context.fromPlayer;
-              // 获取被偷走的牌（最后一张从来源玩家手牌中移除的牌）
-              const stolenCard = player.handCards[player.handCards.length - 1];
-              if (stolenCard) {
-                this.actionListeners.forEach(listener => listener({
-                  action: GameAction.SKILL_STEAL_CARD,
-                  playerId: player.id,
-                  targetIds: [fromPlayer.id],
-                  skillId: skill.id,
-                  logMessage: result.message,
-                  stolenCard: stolenCard,
-                  stolenFromPlayerId: fromPlayer.id,
-                  isEffectResult: true,
-                }));
-              }
-            }
-          }
-        } catch (error) {
-          console.error(`执行技能 ${skill.name} 时出错:`, error);
-        }
-      }
-    });
-  }
-
   // 回复体力
   heal(playerId: string, amount: number): void {
     const player = this.state.players.find(p => p.id === playerId);
@@ -2072,12 +1994,6 @@ export class GameEngine {
 
     const oldHp = player.character.hp;
     player.character.hp = Math.min(player.character.hp + amount, player.character.maxHp);
-    const healedAmount = player.character.hp - oldHp;
-
-    if (healedAmount > 0) {
-      // 触发治疗技能
-      this.triggerSkill(player, SkillTrigger.ON_HEAL, { amount: healedAmount });
-    }
   }
 
   // 处理死亡
