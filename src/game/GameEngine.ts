@@ -1214,6 +1214,7 @@ export class GameEngine {
           console.log(`${player.character.name} 没有 ${shownCard.suit} 花色的手牌，无法造成伤害`);
 
           // 通知前端显示详细日志（标记为效果结果，避免重复记录）
+          console.log('[GameEngine] 火攻（无同花色）：发送 shownCard', shownCard);
           this.actionListeners.forEach(listener => listener({
             action: GameAction.PLAY_CARD,
             playerId: player.id,
@@ -1277,6 +1278,7 @@ export class GameEngine {
         };
 
         // 通知前端进入火攻响应阶段（标记为效果结果，避免重复记录）
+        console.log('[GameEngine] 火攻（有同花色）：发送 shownCard', shownCard);
         this.actionListeners.forEach(listener => listener({
           action: GameAction.PLAY_CARD,
           playerId: player.id,

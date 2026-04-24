@@ -1532,6 +1532,51 @@
   font-weight: bold;
 }
 
+/* 火攻展示牌样式 */
+.fire-attack-shown {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 300;
+  animation: fireAttackShownAppear 0.5s ease-out;
+}
+
+@keyframes fireAttackShownAppear {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.fire-attack-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 20px;
+  border-radius: 12px;
+  border: 2px solid #ff5722;
+  box-shadow: 0 0 30px rgba(255, 87, 34, 0.5);
+}
+
+.fire-attack-wrapper .card {
+  transform: scale(1.2);
+  box-shadow: 0 8px 25px rgba(255, 87, 34, 0.4);
+}
+
+.fire-attack-label {
+  margin-top: 15px;
+  font-size: 18px;
+  font-weight: bold;
+  color: #ff5722;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
 /* 手牌消失动画区域（用于反馈等技能） */
 .disappearing-cards-area {
   position: fixed;

@@ -505,6 +505,7 @@ export const GameBoard: React.FC = () => {
 
       // 处理火攻展示牌
       if (action.action === 'play_card' && action.cardName === '火攻' && action.fireAttackShownCard) {
+        console.log('[GameBoard] 处理火攻展示牌:', action.fireAttackShownCard);
         const gameState = useGameStore.getState().gameState;
         if (gameState) {
           const target = gameState.players.find(p => p.id === action.targetIds?.[0]);
@@ -516,13 +517,22 @@ export const GameBoard: React.FC = () => {
               timestamp: Date.now(),
               isFireAttackShown: true, // 标记为火攻展示牌
             };
+            console.log('[GameBoard] 添加火攻展示牌到 playedCards:', shownCardInfo);
             // 添加展示牌到列表开头
-            setPlayedCards(prev => [shownCardInfo, ...prev].slice(0, 5));
+            setPlayedCards(prev => {
+              const newCards = [shownCardInfo, ...prev].slice(0, 5);
+              console.log('[GameBoard] 更新后的 playedCards:', newCards);
+              return newCards;
+            });
             // 5秒后移除（火攻展示牌显示更久）
             setTimeout(() => {
               setPlayedCards(prev => prev.filter(c => c.id !== shownCardInfo.id));
             }, 5000);
+          } else {
+            console.warn('[GameBoard] 火攻展示牌处理失败：找不到目标玩家', action.targetIds);
           }
+        } else {
+          console.warn('[GameBoard] 火攻展示牌处理失败：gameState 为空');
         }
       }
 
@@ -756,9 +766,16 @@ export const GameBoard: React.FC = () => {
       if (pendingResponse) {
         // 决斗阶段使用 duelState.currentTurnId 判断
         const isDuel = pendingResponse.request.responseType === ResponseType.DUEL;
-        const currentTurnId = isDuel && pendingResponse.duelState
-          ? pendingResponse.duelState.currentTurnId
-          : pendingResponse.request.targetPlayerId;
+        // 火攻阶段使用 fireAttackState.sourceId 判断
+        const isFireAttack = pendingResponse.request.responseType === ResponseType.FIRE_ATTACK;
+        let currentTurnId: string;
+        if (isDuel && pendingResponse.duelState) {
+          currentTurnId = pendingResponse.duelState.currentTurnId;
+        } else if (isFireAttack && pendingResponse.fireAttackState) {
+          currentTurnId = pendingResponse.fireAttackState.sourceId;
+        } else {
+          currentTurnId = pendingResponse.request.targetPlayerId;
+        }
 
         if (currentTurnId === humanPlayer.id) {
           const card = humanPlayer.handCards.find(c => c.id === cardId);
@@ -1518,6 +1535,62 @@ export const GameBoard: React.FC = () => {
                         // 等待对方响应
                         <div className="response-notice-text">
                           等待 {opponent?.character.name} 响应【决斗】...
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* 响应阶段提示（火攻） - 放在玩家提示区 */}
+                {gameState.phase === GamePhase.RESPONSE && gameState.pendingResponse?.request.responseType === ResponseType.FIRE_ATTACK && !humanPlayer.isDead && (
+                  <div className="response-notice">
+                    {(() => {
+                      const pendingResponse = gameState.pendingResponse;
+                      const fireAttackState = pendingResponse?.fireAttackState;
+                      const isSource = fireAttackState?.sourceId === humanPlayer.id;
+                      const shownCard = fireAttackState?.shownCard;
+                      const hasSameSuit = humanPlayer.handCards.some(c => c.suit === shownCard?.suit);
+
+                      return isSource ? (
+                        // 火攻使用者：选择是否弃置同花色牌造成伤害
+                        <>
+                          <div className="response-notice-text">
+                            【火攻】目标展示了 <span style={{ color: '#ff5722' }}>{shownCard?.suit}{shownCard?.number} {shownCard?.name}</span>
+                          </div>
+                          <div className="response-notice-hint">
+                            {hasSameSuit 
+                              ? `请弃置一张${shownCard?.suit}花色的手牌，对目标造成1点火焰伤害`
+                              : '你没有同花色的手牌，无法造成伤害'
+                            }
+                          </div>
+                          <div className="response-notice-buttons">
+                            <button
+                              className="action-btn btn-confirm"
+                              onClick={() => {
+                                if (selectedResponseCard) {
+                                  respondToAttack(selectedResponseCard);
+                                  setSelectedResponseCard(null);
+                                }
+                              }}
+                              disabled={!selectedResponseCard}
+                            >
+                              确定
+                            </button>
+                            <button
+                              className="action-btn btn-cancel"
+                              onClick={() => {
+                                setSelectedResponseCard(null);
+                                respondToAttack();
+                              }}
+                            >
+                              取消
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        // 等待火攻使用者决策
+                        <div className="response-notice-text">
+                          等待 {gameState.players.find(p => p.id === fireAttackState?.sourceId)?.character.name} 决策【火攻】...
                         </div>
                       );
                     })()}

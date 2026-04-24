@@ -394,6 +394,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       targetPlayerId = pendingResponse.duelState.currentTurnId;
     }
 
+    // 对于火攻，使用 fireAttackState.sourceId 确定火攻使用者
+    if (pendingResponse.request.responseType === ResponseType.FIRE_ATTACK && pendingResponse.fireAttackState) {
+      targetPlayerId = pendingResponse.fireAttackState.sourceId;
+    }
+
     const targetPlayer = gameState.players.find(p => p.id === targetPlayerId);
     if (!targetPlayer) return;
 

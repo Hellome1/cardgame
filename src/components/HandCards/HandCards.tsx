@@ -66,9 +66,24 @@ export const HandCards: React.FC<HandCardsProps> = ({
     return () => window.removeEventListener('resize', updateWidth);
   }, []);
 
+  // 防御性检查：确保 humanPlayer 有效（在hooks之后）
+  if (!humanPlayer) {
+    console.warn('HandCards: humanPlayer is undefined');
+    return <div className="hand-cards-error">玩家数据加载中...</div>;
+  }
+
   // 计算每张牌的偏移量
   const cardPositions = useMemo(() => {
-    const totalCards = cards.length;
+    // 防御性检查：确保 cards 是有效数组
+    if (!cards || !Array.isArray(cards)) {
+      console.warn('HandCards: cards is not a valid array', cards);
+      return [];
+    }
+    
+    // 过滤掉可能为 undefined 的卡牌
+    const validCards = cards.filter(card => card && card.id);
+    const totalCards = validCards.length;
+    
     if (totalCards === 0) return [];
 
     if (totalCards === 1) {
@@ -80,7 +95,7 @@ export const HandCards: React.FC<HandCardsProps> = ({
 
     // 情况1：使用默认间隙不会溢出 - 保持原有间隙，不堆叠
     if (totalWidthWithDefaultGap <= containerWidth) {
-      return cards.map((_, index) => ({
+      return validCards.map((_, index) => ({
         offset: index * (cardWidth + defaultGap),
         isStacked: false,
         zIndex: index,
@@ -97,7 +112,7 @@ export const HandCards: React.FC<HandCardsProps> = ({
     const minGap = -100; // 最大堆叠程度（负值表示重叠）
     const clampedGap = Math.max(dynamicGap, minGap);
 
-    return cards.map((_, index) => ({
+    return validCards.map((_, index) => ({
       offset: index * (cardWidth + clampedGap),
       isStacked: true, // 标记为堆叠状态
       zIndex: index,
@@ -111,10 +126,17 @@ export const HandCards: React.FC<HandCardsProps> = ({
 
   // 决斗阶段使用 duelState.currentTurnId 判断
   const isDuel = pendingResponse?.request.responseType === 'duel';
-  const currentTurnId = isDuel && pendingResponse?.duelState
-    ? pendingResponse.duelState.currentTurnId
-    : pendingResponse?.request.targetPlayerId;
-  const isResponseTarget = pendingResponse && currentTurnId === humanPlayer.id;
+  // 火攻阶段使用 fireAttackState.sourceId 判断
+  const isFireAttack = pendingResponse?.request.responseType === 'fire_attack';
+  let currentTurnId: string | undefined;
+  if (isDuel && pendingResponse?.duelState) {
+    currentTurnId = pendingResponse.duelState.currentTurnId;
+  } else if (isFireAttack && pendingResponse?.fireAttackState) {
+    currentTurnId = pendingResponse.fireAttackState.sourceId;
+  } else {
+    currentTurnId = pendingResponse?.request.targetPlayerId;
+  }
+  const isResponseTarget = pendingResponse && humanPlayer && currentTurnId === humanPlayer.id;
 
   // 处理鼠标进入/离开手牌区
   const handleMouseEnter = () => {
@@ -138,7 +160,11 @@ export const HandCards: React.FC<HandCardsProps> = ({
     >
       {/* 透明滑轨区域 - 用于保持悬停状态 */}
       <div className="hand-cards-hover-track"></div>
-      {cards.map((card, index) => {
+      {/* 防御性检查：确保 cards 是有效数组 */}
+      {!cards || !Array.isArray(cards) ? (
+        <div className="hand-cards-error">手牌数据加载中...</div>
+      ) : (
+        cards.filter(card => card && card.id).map((card, index) => {
         const position = cardPositions[index];
         if (!position) return null;
 
@@ -148,6 +174,7 @@ export const HandCards: React.FC<HandCardsProps> = ({
           pendingResponse?.request.responseType === 'dodge' &&
           isValidResponseCard(card, 'dodge') &&
           isResponseTarget &&
+          humanPlayer &&
           pendingResponse.request.sourcePlayerId !== humanPlayer.id;
 
         // 决斗响应（杀）- 双方都可以出杀
@@ -166,13 +193,16 @@ export const HandCards: React.FC<HandCardsProps> = ({
         const isNullifyResponse = isResponsePhase &&
           pendingResponse?.request.responseType === 'nullify' &&
           isValidResponseCard(card, 'nullify') &&
+          humanPlayer &&
           pendingResponse.request.sourcePlayerId !== humanPlayer.id;
 
-        // 火攻响应阶段：只能选择与展示牌同花色的手牌
+        // 火攻响应阶段：火攻使用者选择是否弃置同花色手牌造成伤害
         const isFireAttackResponse = isResponsePhase &&
           pendingResponse?.request.responseType === 'fire_attack' &&
-          pendingResponse.request.targetPlayerId === humanPlayer.id &&
+          humanPlayer &&
           pendingResponse.fireAttackState &&
+          pendingResponse.fireAttackState.sourceId === humanPlayer.id &&
+          pendingResponse.fireAttackState.shownCard &&
           card.suit === pendingResponse.fireAttackState.shownCard.suit;
 
         const isResponseCard = isDodgeResponse || isDuelResponse || isAttackResponse || isNullifyResponse || isFireAttackResponse;
@@ -217,7 +247,7 @@ export const HandCards: React.FC<HandCardsProps> = ({
             />
           </div>
         );
-      })}
+      }))}
     </div>
   );
 };
