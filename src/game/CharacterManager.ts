@@ -22,6 +22,7 @@ export class CharacterManager {
       maxHp: 4,
       hp: 4,
       avatar: '/avatars/caocao.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -32,6 +33,7 @@ export class CharacterManager {
       maxHp: 3,
       hp: 3,
       avatar: '/avatars/simayi.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -42,6 +44,7 @@ export class CharacterManager {
       maxHp: 4,
       hp: 4,
       avatar: '/avatars/xiahoudun.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -52,6 +55,7 @@ export class CharacterManager {
       maxHp: 4,
       hp: 4,
       avatar: '/avatars/zhangliao.png',
+      skills: [],
     });
 
     // 蜀国武将
@@ -63,6 +67,7 @@ export class CharacterManager {
       maxHp: 4,
       hp: 4,
       avatar: '/avatars/liubei.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -73,6 +78,7 @@ export class CharacterManager {
       maxHp: 4,
       hp: 4,
       avatar: '/avatars/guanyu.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -83,6 +89,7 @@ export class CharacterManager {
       maxHp: 4,
       hp: 4,
       avatar: '/avatars/zhangfei.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -93,6 +100,7 @@ export class CharacterManager {
       maxHp: 3,
       hp: 3,
       avatar: '/avatars/zhugeliang.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -103,6 +111,7 @@ export class CharacterManager {
       maxHp: 4,
       hp: 4,
       avatar: '/avatars/zhaoyun.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -113,6 +122,7 @@ export class CharacterManager {
       maxHp: 4,
       hp: 4,
       avatar: '/avatars/machao.png',
+      skills: [],
     });
 
     // 吴国武将
@@ -124,6 +134,7 @@ export class CharacterManager {
       maxHp: 4,
       hp: 4,
       avatar: '/avatars/sunquan.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -134,6 +145,7 @@ export class CharacterManager {
       maxHp: 3,
       hp: 3,
       avatar: '/avatars/zhouyu.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -144,6 +156,7 @@ export class CharacterManager {
       maxHp: 4,
       hp: 4,
       avatar: '/avatars/lumeng.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -154,6 +167,7 @@ export class CharacterManager {
       maxHp: 4,
       hp: 4,
       avatar: '/avatars/huanggai.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -164,6 +178,7 @@ export class CharacterManager {
       maxHp: 3,
       hp: 3,
       avatar: '/avatars/daqiao.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -174,6 +189,7 @@ export class CharacterManager {
       maxHp: 3,
       hp: 3,
       avatar: '/avatars/sunshangxiang.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -184,6 +200,7 @@ export class CharacterManager {
       maxHp: 3,
       hp: 3,
       avatar: '/avatars/luxun.png',
+      skills: [],
     });
 
     // 群雄武将
@@ -195,6 +212,7 @@ export class CharacterManager {
       maxHp: 4,
       hp: 4,
       avatar: '/avatars/lvbu.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -205,6 +223,7 @@ export class CharacterManager {
       maxHp: 3,
       hp: 3,
       avatar: '/avatars/huatuo.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -215,6 +234,7 @@ export class CharacterManager {
       maxHp: 3,
       hp: 3,
       avatar: '/avatars/diaochan.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -225,6 +245,7 @@ export class CharacterManager {
       maxHp: 4,
       hp: 4,
       avatar: '/avatars/yuanshao.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -235,6 +256,7 @@ export class CharacterManager {
       maxHp: 8,
       hp: 8,
       avatar: '/avatars/dongzhuo.png',
+      skills: [],
     });
 
     this.addCharacter({
@@ -245,6 +267,7 @@ export class CharacterManager {
       maxHp: 3,
       hp: 3,
       avatar: '/avatars/jiaxu.png',
+      skills: [],
     });
   }
 

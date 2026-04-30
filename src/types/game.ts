@@ -40,6 +40,7 @@ export enum SpellCardName {
   SAVAGE = '南蛮入侵',
   DRAW_TWO = '无中生有',
   NULLIFICATION = '无懈可击',
+  GRAIN = '五谷丰登',
   // 延时锦囊牌
   INDULGENCE = '乐不思蜀',
   SUPPLY_SHORTAGE = '兵粮寸断',
@@ -148,6 +149,7 @@ export interface Character {
   maxHp: number;
   hp: number;
   avatar: string;
+  skills: Skill[];
 }
 
 // 延时锦囊牌区域

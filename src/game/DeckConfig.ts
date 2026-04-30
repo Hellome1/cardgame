@@ -16,9 +16,9 @@ export interface CardDefinition {
   description: string;
 }
 
-// 普通杀 (30张)
+// 普通杀 (33张)
 const normalAttacks: CardDefinition[] = [
-  // ♠ 7张: A, 2, 3, 4, 5, 6, 7, 8, 9, 10, J (取前7个)
+  // ♠ 11张: A, 2, 3, 4, 5, 6, 7, 8, 9, 10, J
   { name: BasicCardName.ATTACK, suit: CardSuit.SPADE, number: 1, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
   { name: BasicCardName.ATTACK, suit: CardSuit.SPADE, number: 2, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
   { name: BasicCardName.ATTACK, suit: CardSuit.SPADE, number: 3, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
@@ -26,11 +26,15 @@ const normalAttacks: CardDefinition[] = [
   { name: BasicCardName.ATTACK, suit: CardSuit.SPADE, number: 5, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
   { name: BasicCardName.ATTACK, suit: CardSuit.SPADE, number: 6, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
   { name: BasicCardName.ATTACK, suit: CardSuit.SPADE, number: 7, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
+  { name: BasicCardName.ATTACK, suit: CardSuit.SPADE, number: 8, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
+  { name: BasicCardName.ATTACK, suit: CardSuit.SPADE, number: 9, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
+  { name: BasicCardName.ATTACK, suit: CardSuit.SPADE, number: 10, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
+  { name: BasicCardName.ATTACK, suit: CardSuit.SPADE, number: 11, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
   // ♥ 3张: 10, J, Q
   { name: BasicCardName.ATTACK, suit: CardSuit.HEART, number: 10, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
   { name: BasicCardName.ATTACK, suit: CardSuit.HEART, number: 11, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
   { name: BasicCardName.ATTACK, suit: CardSuit.HEART, number: 12, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
-  // ♣ 14张: A, 2, 3, 4, 5, 6, 7, 8, 9, 10, J, Q, K
+  // ♣ 13张: A, 2, 3, 4, 5, 6, 7, 8, 9, 10, J, Q, K
   { name: BasicCardName.ATTACK, suit: CardSuit.CLUB, number: 1, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
   { name: BasicCardName.ATTACK, suit: CardSuit.CLUB, number: 2, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
   { name: BasicCardName.ATTACK, suit: CardSuit.CLUB, number: 3, type: 'basic', description: '出牌阶段，对你攻击范围内的一名其他角色使用。该角色需打出一张【闪】，否则受到你造成的1点伤害。' },
@@ -149,7 +153,7 @@ export const basicCards: CardDefinition[] = [
   ...wines,
 ];
 
-// 锦囊牌 (50张)
+// 锦囊牌 (42张)
 export const spellCards: CardDefinition[] = [
   // 无中生有 4张: ♥7、♥8、♥9、♥J
   { name: SpellCardName.DRAW_TWO, suit: CardSuit.HEART, number: 7, type: 'spell', description: '出牌阶段，对你使用。你摸两张牌。' },
@@ -210,11 +214,11 @@ export const spellCards: CardDefinition[] = [
 
 // 装备牌 (24张)
 export const equipmentCards: CardDefinition[] = [
-  // 武器 (11张)
+  // 武器 (12张)
   { name: '诸葛连弩', suit: CardSuit.SPADE, number: 1, type: 'equipment', equipmentType: EquipmentType.WEAPON, range: 1, description: '锁定技，你于出牌阶段内使用【杀】无次数限制。' },
   { name: '诸葛连弩', suit: CardSuit.CLUB, number: 1, type: 'equipment', equipmentType: EquipmentType.WEAPON, range: 1, description: '锁定技，你于出牌阶段内使用【杀】无次数限制。' },
   { name: '青釭剑', suit: CardSuit.SPADE, number: 2, type: 'equipment', equipmentType: EquipmentType.WEAPON, range: 2, description: '锁定技，当你使用【杀】指定一名角色为目标后，你令其防具无效直到此【杀】结算完毕。' },
-  { name: '雌雄双股剑', suit: CardSuit.SPADE, number: 2, type: 'equipment', equipmentType: EquipmentType.WEAPON, range: 2, description: '当你使用【杀】指定一名异性角色为目标后，你可以令其选择一项：1.弃置一张手牌；2.令你摸一张牌。' },
+  { name: '雌雄双股剑', suit: CardSuit.SPADE, number: 2, type: 'equipment', equipmentType: EquipmentType.WEAPON, range: 2, description: '当你使用【杀】指定一名异性角色为目标后，你可以令其选择一项：弃置一张手牌，或令你摸一张牌。' },
   { name: '青龙偃月刀', suit: CardSuit.SPADE, number: 5, type: 'equipment', equipmentType: EquipmentType.WEAPON, range: 3, description: '当你使用的【杀】被【闪】抵消后，你可以弃置一张手牌，然后对目标角色再使用一张【杀】。' },
   { name: '丈八蛇矛', suit: CardSuit.SPADE, number: 12, type: 'equipment', equipmentType: EquipmentType.WEAPON, range: 3, description: '你可以将两张手牌当【杀】使用或打出。' },
   { name: '贯石斧', suit: CardSuit.DIAMOND, number: 5, type: 'equipment', equipmentType: EquipmentType.WEAPON, range: 3, description: '当你使用的【杀】被【闪】抵消后，你可以弃置两张牌，然后令此【杀】依然对其造成伤害。' },
@@ -223,7 +227,7 @@ export const equipmentCards: CardDefinition[] = [
   { name: '寒冰剑', suit: CardSuit.SPADE, number: 2, type: 'equipment', equipmentType: EquipmentType.WEAPON, range: 2, description: '当你使用【杀】对目标角色造成伤害时，若该角色有牌，你可以防止此伤害，改为弃置其两张牌。' },
   { name: '古锭刀', suit: CardSuit.SPADE, number: 1, type: 'equipment', equipmentType: EquipmentType.WEAPON, range: 2, description: '锁定技，当你使用【杀】指定目标后，若该角色没有手牌，此【杀】伤害+1。' },
   { name: '朱雀羽扇', suit: CardSuit.DIAMOND, number: 1, type: 'equipment', equipmentType: EquipmentType.WEAPON, range: 4, description: '你可以将一张普通【杀】当【火杀】使用。' },
-  // 防具 (7张)
+  // 防具 (6张)
   { name: '八卦阵', suit: CardSuit.SPADE, number: 2, type: 'equipment', equipmentType: EquipmentType.ARMOR, description: '当你需要使用或打出【闪】时，你可以进行判定，若结果为红色，视为你使用或打出了一张【闪】。' },
   { name: '八卦阵', suit: CardSuit.CLUB, number: 2, type: 'equipment', equipmentType: EquipmentType.ARMOR, description: '当你需要使用或打出【闪】时，你可以进行判定，若结果为红色，视为你使用或打出了一张【闪】。' },
   { name: '仁王盾', suit: CardSuit.CLUB, number: 2, type: 'equipment', equipmentType: EquipmentType.ARMOR, description: '锁定技，黑色的【杀】对你无效。' },
@@ -257,7 +261,7 @@ export function validateDeck(): { isValid: boolean; total: number; counts: Recor
   };
 
   return {
-    isValid: counts.total === 159,
+    isValid: counts.total === 154,
     total: counts.total,
     counts: {
       '基本牌': counts.basic,

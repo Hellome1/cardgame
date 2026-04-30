@@ -122,3 +122,13 @@ export enum GameAction {
   DISCARD_CARD = 'discard_card',
   END_TURN = 'end_turn',
 }
+
+// 技能类型
+export enum SkillType {
+  ACTIVE = 'active',      // 主动技能
+  PASSIVE = 'passive',    // 被动技能
+  TRIGGER = 'trigger',    // 触发技能
+  LIMITED = 'limited',    // 限定技能
+  AWAKENING = 'awakening', // 觉醒技能
+  LOCKED = 'locked',      // 锁定技能
+}

@@ -11,7 +11,7 @@ export function useOptimizedGameState(gameState: GameState | null) {
 
   // 清除缓存当游戏状态发生关键变化时
   useEffect(() => {
-    if (gameState?.turn !== prevStateRef.current?.turn) {
+    if (gameState?.round !== prevStateRef.current?.round) {
       cacheRef.current.clear();
     }
     prevStateRef.current = gameState;
@@ -20,8 +20,8 @@ export function useOptimizedGameState(gameState: GameState | null) {
   // 记忆化当前玩家
   const currentPlayer = useMemo(() => {
     if (!gameState) return null;
-    return gameState.players.find(p => p.id === gameState.currentPlayer);
-  }, [gameState?.currentPlayer, gameState?.players]);
+    return gameState.players[gameState.currentPlayerIndex];
+  }, [gameState?.currentPlayerIndex, gameState?.players]);
 
   // 记忆化人类玩家
   const humanPlayer = useMemo(() => {
@@ -58,7 +58,11 @@ export function useOptimizedGameState(gameState: GameState | null) {
     const map = new Map<string, Card>();
     gameState.players.forEach(p => {
       p.handCards.forEach(c => map.set(c.id, c));
-      p.equipment.forEach(c => map.set(c.id, c));
+      // 添加装备区的卡牌
+      if (p.equipment.weapon) map.set(p.equipment.weapon.id, p.equipment.weapon);
+      if (p.equipment.armor) map.set(p.equipment.armor.id, p.equipment.armor);
+      if (p.equipment.horsePlus) map.set(p.equipment.horsePlus.id, p.equipment.horsePlus);
+      if (p.equipment.horseMinus) map.set(p.equipment.horseMinus.id, p.equipment.horseMinus);
     });
     gameState.discardPile.forEach(c => map.set(c.id, c));
     return map;
@@ -95,8 +99,8 @@ export function useOptimizedGameState(gameState: GameState | null) {
   // 记忆化有效目标
   const validTargets = useMemo(() => {
     if (!gameState || !humanPlayer) return [];
-    return gameState.players.filter(p => 
-      p.id !== humanPlayer.id && p.health > 0
+    return gameState.players.filter(p =>
+      p.id !== humanPlayer.id && p.character.hp > 0 && !p.isDead
     );
   }, [gameState?.players, humanPlayer?.id]);
 

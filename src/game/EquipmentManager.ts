@@ -86,7 +86,7 @@ export class EquipmentManager {
    */
   static canTriggerHanBing(attacker: Player, target: Player): boolean {
     if (attacker.equipment.weapon?.name !== '寒冰剑') return false;
-    return target.handCards.length > 0 || target.equipment.weapon || target.equipment.armor;
+    return target.handCards.length > 0 || !!target.equipment.weapon || !!target.equipment.armor;
   }
 
   /**

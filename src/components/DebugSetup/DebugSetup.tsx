@@ -18,9 +18,6 @@ export interface DebugConfig {
   }[];
 }
 
-// 模块级别的牌堆缓存，确保只创建一次
-let cachedDeck: Card[] | null = null;
-
 // 花色显示
 const suitDisplay: Record<CardSuit, string> = {
   [CardSuit.SPADE]: '♠',
@@ -58,15 +55,12 @@ export const DebugSetup: React.FC<DebugSetupProps> = ({ onStartDebug, onCancel }
   const cardManager = CardManager.getInstance();
   const allCharacters = characterManager.getAllCharacters();
 
-  // 创建一次牌堆，供整个组件使用（静默模式，不记录日志）
+  // 创建牌堆，供整个组件使用（静默模式，不记录日志）
+  // 每次组件挂载时重新创建，确保使用最新的牌堆配置
   const fullDeck = useMemo(() => {
-    if (!cachedDeck) {
-      cachedDeck = cardManager.createStandardDeck(true);
-      console.log('[DebugSetup] 创建牌堆缓存');
-    } else {
-      console.log('[DebugSetup] 使用缓存的牌堆');
-    }
-    return cachedDeck;
+    const deck = cardManager.createStandardDeck(true);
+    console.log('[DebugSetup] 创建牌堆，基本牌数量:', deck.filter(c => c.type === CardType.BASIC).length);
+    return deck;
   }, []);
 
   // 按势力分类武将
@@ -87,9 +81,12 @@ export const DebugSetup: React.FC<DebugSetupProps> = ({ onStartDebug, onCancel }
 
   // 按类型分类牌堆
   const deckByCategory = useMemo(() => {
-    const basicCards = fullDeck.filter(c => c.type === CardType.BASIC);
-    const spellCards = fullDeck.filter(c => c.type === CardType.SPELL);
-    const equipmentCards = fullDeck.filter(c => c.type === CardType.EQUIPMENT);
+    console.log('[DebugSetup] 分类牌堆，总牌数:', fullDeck.length);
+    console.log('[DebugSetup] 第一张牌的type:', fullDeck[0]?.type, 'name:', fullDeck[0]?.name);
+    const basicCards = fullDeck.filter(c => c.type === 'basic');
+    const spellCards = fullDeck.filter(c => c.type === 'spell');
+    const equipmentCards = fullDeck.filter(c => c.type === 'equipment');
+    console.log('[DebugSetup] 分类结果 - 基本牌:', basicCards.length, '锦囊牌:', spellCards.length, '装备牌:', equipmentCards.length);
     return { basicCards, spellCards, equipmentCards };
   }, [fullDeck]);
 

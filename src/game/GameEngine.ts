@@ -260,6 +260,21 @@ export class GameEngine {
     return this.state.players[this.state.currentPlayerIndex];
   }
 
+  // 获取从当前玩家开始的玩家顺序（用于五谷丰登等牌）
+  private getPlayerOrderFromCurrent(): Player[] {
+    const players = this.state.players;
+    const currentIndex = this.state.currentPlayerIndex;
+    const orderedPlayers: Player[] = [];
+
+    // 从当前玩家开始，按顺序添加所有存活玩家
+    for (let i = 0; i < players.length; i++) {
+      const index = (currentIndex + i) % players.length;
+      orderedPlayers.push(players[index]);
+    }
+
+    return orderedPlayers;
+  }
+
   // 检查游戏是否已开始
   checkGameStarted(): boolean {
     return this.gameStartedFlag;
@@ -1575,6 +1590,57 @@ export class GameEngine {
           logMessage: `${player.character.name} 使用了【闪电】`,
           isEffectResult: true,
         }));
+        return true;
+
+      case SpellCardName.GRAIN:
+        // 五谷丰登：从牌堆顶亮出等同于角色数量的牌，每名角色获得其中一张
+        const alivePlayers = this.state.players.filter(p => !p.isDead);
+        const cardCount = Math.min(alivePlayers.length, this.state.deck.length);
+
+        if (cardCount === 0) {
+          console.log('牌堆为空，无法使用五谷丰登');
+          return false;
+        }
+
+        // 从牌堆顶亮出牌
+        const shownCards = this.state.deck.slice(0, cardCount);
+        console.log(`五谷丰登亮出 ${shownCards.length} 张牌: ${shownCards.map(c => c.name).join(', ')}`);
+
+        // 按顺序让每名角色选择一张牌
+        const playerOrder = this.getPlayerOrderFromCurrent();
+        const selectedCards: { playerName: string; card: Card }[] = [];
+
+        for (const p of playerOrder) {
+          if (p.isDead) continue;
+          if (shownCards.length === 0) break;
+
+          // AI随机选择，人类玩家默认选择第一张（简化处理）
+          const selectedIndex = p.isAI ? Math.floor(Math.random() * shownCards.length) : 0;
+          const selectedCard = shownCards.splice(selectedIndex, 1)[0];
+
+          // 加入玩家手牌
+          p.handCards.push(selectedCard);
+          selectedCards.push({ playerName: p.character.name, card: selectedCard });
+          console.log(`${p.character.name} 选择了【${selectedCard.suit}${selectedCard.number} ${selectedCard.name}】`);
+        }
+
+        // 从牌堆中移除已分配的牌
+        this.state.deck = this.state.deck.slice(cardCount);
+
+        // 构建日志消息
+        const selectedCardsDesc = selectedCards.map(s => `${s.playerName}获得【${s.card.name}】`).join('、');
+
+        this.actionListeners.forEach(listener => listener({
+          action: GameAction.PLAY_CARD,
+          playerId: player.id,
+          cardId: card.id,
+          cardName: card.name,
+          logMessage: `${player.character.name} 使用了【五谷丰登】，${selectedCardsDesc}`,
+          isEffectResult: true,
+        }));
+
+        // 记录牌堆变化
+        this.saveDeckState(`${player.character.name}五谷丰登`, this.state.deck);
         return true;
 
       default:

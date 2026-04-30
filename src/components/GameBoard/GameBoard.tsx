@@ -1007,6 +1007,28 @@ export const GameBoard: React.FC = () => {
       return canStealAny;
     }
 
+    // 检查兵粮寸断的距离限制（距离为1）
+    if (card.type === CardType.SPELL && card.name === SpellCardName.SUPPLY_SHORTAGE) {
+      // 检查是否至少有一个目标在兵粮寸断的距离范围内（距离1）
+      const canUseSupplyShortage = opponents.some(opponent =>
+        !opponent.isDead &&
+        !opponent.delayedSpells.supplyShortage && // 目标不能有已有的兵粮寸断
+        DistanceCalculator.calculateDistance(humanPlayer, opponent, gameState.players) <= 1
+      );
+      return canUseSupplyShortage;
+    }
+
+    // 检查乐不思蜀的距离限制（距离为1）
+    if (card.type === CardType.SPELL && card.name === SpellCardName.INDULGENCE) {
+      // 检查是否至少有一个目标在乐不思蜀的距离范围内（距离1）
+      const canUseIndulgence = opponents.some(opponent =>
+        !opponent.isDead &&
+        !opponent.delayedSpells.indulgence && // 目标不能有已有的乐不思蜀
+        DistanceCalculator.calculateDistance(humanPlayer, opponent, gameState.players) <= 1
+      );
+      return canUseIndulgence;
+    }
+
     return true;
   };
 
