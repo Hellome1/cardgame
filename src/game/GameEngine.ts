@@ -1226,6 +1226,9 @@ export class GameEngine {
           return false;
         }
 
+        // 处理自己火攻自己的特殊情况
+        const isSelfFireAttack = player.id === fireTarget.id;
+
         // 进入火攻第一阶段：等待目标选择展示牌
         this.state.phase = GamePhase.RESPONSE;
         this.state.pendingResponse = {
@@ -1233,7 +1236,7 @@ export class GameEngine {
             targetPlayerId: fireTarget.id,  // 目标需要响应（选择展示牌）
             sourcePlayerId: player.id,
             cardName: '火攻',
-            responseCardName: '选择一张手牌展示',
+            responseCardName: isSelfFireAttack ? '选择一张手牌展示（对自己使用）' : '选择一张手牌展示',
             damage: 0,
             responseType: ResponseType.FIRE_ATTACK,
           },
@@ -1243,21 +1246,27 @@ export class GameEngine {
             sourceId: player.id,
             targetId: fireTarget.id,
             waitingForTarget: true,  // 标记正在等待目标选择
+            isSelfFireAttack,  // 标记是否是自己火攻自己
           },
         };
 
         // 通知前端进入火攻选择阶段
+        const logMessage = isSelfFireAttack
+          ? `${player.character.name} 对自己使用了【火攻】，请选择一张手牌展示`
+          : `${player.character.name} 对 ${fireTarget.character.name} 使用了【火攻】，等待 ${fireTarget.character.name} 选择一张手牌展示`;
+
         this.actionListeners.forEach(listener => listener({
           action: GameAction.PLAY_CARD,
           playerId: player.id,
           cardId: card.id,
           cardName: card.name,
           targetIds: [fireTarget.id],
-          logMessage: `${player.character.name} 对 ${fireTarget.character.name} 使用了【火攻】，等待 ${fireTarget.character.name} 选择一张手牌展示`,
+          logMessage,
           isEffectResult: true,
         }));
 
         // 如果是AI目标，自动选择一张手牌展示
+        // 自己火攻自己时，如果是AI则自动选择，如果是人类玩家则等待手动选择
         if (fireTarget.isAI) {
           this.processAIFireAttackTargetSelect(fireTarget);
         }
@@ -2927,6 +2936,7 @@ export class GameEngine {
       targetId,
       shownCard: selectedCard,
       waitingForTarget: false,  // 不再等待目标
+      isSelfFireAttack: pendingResponse.fireAttackState.isSelfFireAttack,  // 保留自己火攻自己的标记
     };
 
     // 通知前端

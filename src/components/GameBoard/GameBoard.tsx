@@ -89,7 +89,13 @@ const isValidResponseCard = (card: GameCard, responseType: ResponseType, pending
       // 需要打出无懈可击
       return card.name === SpellCardName.NULLIFICATION;
     case ResponseType.FIRE_ATTACK:
-      // 火攻响应：需要弃置与展示牌同花色的手牌
+      // 火攻第一阶段：目标选择展示牌（任何手牌都可以选择）
+      // 火攻第二阶段：火攻使用者弃置与展示牌同花色的手牌
+      if (pendingResponse?.fireAttackState?.waitingForTarget) {
+        // 第一阶段：目标可以选择任何手牌展示
+        return true;
+      }
+      // 第二阶段：需要弃置与展示牌同花色的手牌
       if (!pendingResponse?.fireAttackState?.shownCard) return false;
       return card.suit === pendingResponse.fireAttackState.shownCard.suit;
     default:
@@ -767,13 +773,19 @@ export const GameBoard: React.FC = () => {
       if (pendingResponse) {
         // 决斗阶段使用 duelState.currentTurnId 判断
         const isDuel = pendingResponse.request.responseType === ResponseType.DUEL;
-        // 火攻阶段使用 fireAttackState.sourceId 判断
+        // 火攻阶段
         const isFireAttack = pendingResponse.request.responseType === ResponseType.FIRE_ATTACK;
         let currentTurnId: string;
         if (isDuel && pendingResponse.duelState) {
           currentTurnId = pendingResponse.duelState.currentTurnId;
         } else if (isFireAttack && pendingResponse.fireAttackState) {
-          currentTurnId = pendingResponse.fireAttackState.sourceId;
+          // 火攻第一阶段：目标选择展示牌，使用 targetId
+          // 火攻第二阶段：火攻使用者弃牌，使用 sourceId
+          if (pendingResponse.fireAttackState.waitingForTarget) {
+            currentTurnId = pendingResponse.fireAttackState.targetId;
+          } else {
+            currentTurnId = pendingResponse.fireAttackState.sourceId;
+          }
         } else {
           currentTurnId = pendingResponse.request.targetPlayerId;
         }
@@ -818,6 +830,100 @@ export const GameBoard: React.FC = () => {
     }
   };
 
+  // ==================== 卡牌目标检查辅助函数 ====================
+
+  /**
+   * 检查卡牌是否需要选择目标
+   */
+  const cardNeedsTarget = (card: GameCard): boolean => {
+    // 装备牌不需要选择目标（对自己使用）
+    if (card.type === CardType.EQUIPMENT) {
+      return false;
+    }
+
+    // 基本牌：杀、雷杀、火杀需要目标
+    if (card.type === CardType.BASIC) {
+      return card.name === BasicCardName.ATTACK ||
+             card.name === BasicCardName.THUNDER_ATTACK ||
+             card.name === BasicCardName.FIRE_ATTACK_CARD;
+    }
+
+    // 锦囊牌
+    if (card.type === CardType.SPELL) {
+      // 不需要选择目标的锦囊牌
+      const noTargetSpells = [
+        SpellCardName.DRAW_TWO,     // 无中生有
+        SpellCardName.SAVAGE,       // 南蛮入侵
+        SpellCardName.ARCHERY,      // 万箭齐发
+        SpellCardName.PEACH_GARDEN, // 桃园结义
+        SpellCardName.GRAIN,        // 五谷丰登
+        SpellCardName.NULLIFICATION, // 无懈可击（响应牌）
+      ];
+      return !noTargetSpells.includes(card.name as SpellCardName);
+    }
+
+    return false;
+  };
+
+  /**
+   * 检查卡牌是否是单目标牌
+   */
+  const isSingleTargetCard = (card: GameCard): boolean => {
+    if (card.type === CardType.EQUIPMENT) {
+      return false; // 装备牌对自己使用，不算"选择目标"
+    }
+
+    // 基本牌：杀系列是单目标
+    if (card.type === CardType.BASIC) {
+      return card.name === BasicCardName.ATTACK ||
+             card.name === BasicCardName.THUNDER_ATTACK ||
+             card.name === BasicCardName.FIRE_ATTACK_CARD;
+    }
+
+    // 锦囊牌
+    if (card.type === CardType.SPELL) {
+      const singleTargetSpells = [
+        SpellCardName.DUEL,             // 决斗
+        SpellCardName.FIRE_ATTACK,      // 火攻
+        SpellCardName.STEAL,            // 顺手牵羊
+        SpellCardName.DISMANTLE,        // 过河拆桥
+        SpellCardName.INDULGENCE,       // 乐不思蜀
+        SpellCardName.SUPPLY_SHORTAGE,  // 兵粮寸断
+        SpellCardName.LIGHTNING,        // 闪电（对自己使用）
+      ];
+      return singleTargetSpells.includes(card.name as SpellCardName);
+    }
+
+    return false;
+  };
+
+  /**
+   * 检查当前选中的牌是否满足出牌条件
+   * - 需要目标的牌必须选择了目标
+   * - 单目标牌必须选择且只能选择一个目标
+   */
+  const canPlaySelectedCard = (): boolean => {
+    if (!selectedCardId) return false;
+
+    const selectedCard = humanPlayer.handCards.find(c => c.id === selectedCardId);
+    if (!selectedCard) return false;
+
+    // 检查是否需要目标
+    if (cardNeedsTarget(selectedCard)) {
+      // 需要目标但没有选择目标
+      if (selectedTargetIds.length === 0) {
+        return false;
+      }
+
+      // 单目标牌只能选择一个目标
+      if (isSingleTargetCard(selectedCard) && selectedTargetIds.length > 1) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
   // 检查是否可以选择某个玩家作为目标
   const canSelectTarget = (targetPlayer: typeof humanPlayer): boolean => {
     if (!isHumanTurn || gameState.phase !== GamePhase.PLAY) return false;
@@ -831,7 +937,14 @@ export const GameBoard: React.FC = () => {
       return false;
     }
 
-    // 不能选择其他玩家作为目标（装备牌已经处理过了）
+    // 火攻可以选择自己作为目标
+    if (selectedCard.type === CardType.SPELL &&
+        selectedCard.name === SpellCardName.FIRE_ATTACK) {
+      // 火攻：可以选择任何有手牌的玩家，包括自己
+      return !targetPlayer.isDead && targetPlayer.handCards.length > 0;
+    }
+
+    // 不能选择其他玩家作为目标（装备牌和火攻已经处理过了）
     if (targetPlayer.id === humanPlayer.id) return false;
 
     // 根据卡牌类型检查距离
@@ -915,7 +1028,15 @@ export const GameBoard: React.FC = () => {
       return;
     }
 
-    if (playerId === humanPlayer.id) return; // 非装备牌不能选择自己
+    // 火攻可以选择自己，其他非装备牌不能选择自己
+    if (playerId === humanPlayer.id) {
+      if (selectedCard?.type === CardType.SPELL &&
+          selectedCard?.name === SpellCardName.FIRE_ATTACK) {
+        // 火攻可以选择自己，继续处理
+      } else {
+        return; // 其他牌不能选择自己
+      }
+    }
 
     const targetPlayer = gameState.players.find(p => p.id === playerId);
     if (!targetPlayer) return;
@@ -1398,10 +1519,13 @@ export const GameBoard: React.FC = () => {
                 player={humanPlayer}
                 isCurrentTurn={isHumanTurn || (gameState.phase === GamePhase.RESPONSE &&
                   gameState.pendingResponse?.request.targetPlayerId === humanPlayer.id)}
-                isSelected={false}
+                isSelected={selectedTargetIds.includes(humanPlayer.id)}
                 isHuman={true}
                 showIdentity={true}
                 isLord={lordPlayer?.id === humanPlayer.id}
+                isSelectable={canSelectTarget(humanPlayer)}
+                isUnselectable={isTargetUnselectable(humanPlayer)}
+                onClick={() => handlePlayerClick(humanPlayer.id)}
                 setRef={setPlayerRef(humanPlayer.id)}
                 gamePhase={gameState.phase}
               />
@@ -1420,13 +1544,49 @@ export const GameBoard: React.FC = () => {
                   </div>
                 )}
 
+                {/* 出牌阶段提示 */}
+                {isHumanTurn && gameState.phase === GamePhase.PLAY && selectedCardId && (
+                  (() => {
+                    const selectedCard = humanPlayer.handCards.find(c => c.id === selectedCardId);
+                    if (!selectedCard) return null;
+
+                    // 检查是否需要选择目标
+                    if (cardNeedsTarget(selectedCard) && selectedTargetIds.length === 0) {
+                      const cardName = selectedCard.name;
+                      let hintText = '';
+
+                      if (isSingleTargetCard(selectedCard)) {
+                        hintText = `【${cardName}】需要选择一个目标`;
+                      } else if (selectedCard.name === SpellCardName.IRON_CHAIN) {
+                        hintText = '【铁索连环】可以选择1-2个目标';
+                      }
+
+                      if (hintText) {
+                        return (
+                          <div className="play-hint-panel">
+                            <div className="play-hint-text">
+                              {hintText}
+                            </div>
+                          </div>
+                        );
+                      }
+                    }
+
+                    return null;
+                  })()
+                )}
+
                 {/* 出牌按钮 */}
                 {isHumanTurn && gameState.phase === GamePhase.PLAY && (
                   <div className="action-buttons">
                     <button
                       className="action-btn btn-play"
                       onClick={handlePlayCard}
-                      disabled={!selectedCardId}
+                      disabled={!canPlaySelectedCard()}
+                      title={!selectedCardId ? '请选择一张牌' :
+                             (cardNeedsTarget(humanPlayer.handCards.find(c => c.id === selectedCardId)!) && selectedTargetIds.length === 0)
+                               ? '请选择目标'
+                               : '出牌'}
                     >
                       出牌
                     </button>
@@ -1577,6 +1737,7 @@ export const GameBoard: React.FC = () => {
                       const isTarget = fireAttackState?.targetId === humanPlayer.id;
                       const shownCard = fireAttackState?.shownCard;
                       const isWaitingForTarget = fireAttackState?.waitingForTarget;
+                      const isSelfFireAttack = fireAttackState?.isSelfFireAttack;
                       const hasSameSuit = humanPlayer.handCards.some(c => c.suit === shownCard?.suit);
 
                       // 第一阶段：目标选择展示牌
@@ -1584,10 +1745,13 @@ export const GameBoard: React.FC = () => {
                         return (
                           <>
                             <div className="response-notice-text">
-                              【火攻】请选择一张手牌展示
+                              【火攻】{isSelfFireAttack ? '对自己使用，' : ''}请选择一张手牌展示
                             </div>
                             <div className="response-notice-hint">
-                              点击选择一张手牌，展示给火攻使用者看
+                              {isSelfFireAttack 
+                                ? '选择一张手牌展示，然后决定是否弃置同花色牌对自己造成伤害'
+                                : '点击选择一张手牌，展示给火攻使用者看'
+                              }
                             </div>
                             <div className="response-notice-buttons">
                               <button
@@ -1612,11 +1776,11 @@ export const GameBoard: React.FC = () => {
                         return (
                           <>
                             <div className="response-notice-text">
-                              【火攻】目标展示了 <span style={{ color: '#ff5722' }}>{shownCard?.suit}{shownCard?.number} {shownCard?.name}</span>
+                              【火攻】{isSelfFireAttack ? '你' : '目标'}展示了 <span style={{ color: '#ff5722' }}>{shownCard?.suit}{shownCard?.number} {shownCard?.name}</span>
                             </div>
                             <div className="response-notice-hint">
                               {hasSameSuit 
-                                ? `请弃置一张${shownCard?.suit}花色的手牌，对目标造成1点火焰伤害`
+                                ? `请弃置一张${shownCard?.suit}花色的手牌，${isSelfFireAttack ? '对自己' : '对目标'}造成1点火焰伤害`
                                 : '你没有同花色的手牌，无法造成伤害'
                               }
                             </div>

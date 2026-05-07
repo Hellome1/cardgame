@@ -236,6 +236,7 @@ export interface FireAttackState {
   shownCard?: Card;            // 目标展示的手牌（选择后填充）
   noSameSuit?: boolean;        // 是否没有同花色手牌（用于提示）
   waitingForTarget?: boolean;  // 是否正在等待目标选择展示牌
+  isSelfFireAttack?: boolean;  // 是否是自己火攻自己
 }
 
 // 待处理的响应
