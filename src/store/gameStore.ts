@@ -394,9 +394,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
       targetPlayerId = pendingResponse.duelState.currentTurnId;
     }
 
-    // 对于火攻，使用 fireAttackState.sourceId 确定火攻使用者
+    // 对于火攻，检查当前阶段
+    // 第一阶段：目标选择展示牌，使用 targetId
+    // 第二阶段：火攻使用者弃牌，使用 sourceId
     if (pendingResponse.request.responseType === ResponseType.FIRE_ATTACK && pendingResponse.fireAttackState) {
-      targetPlayerId = pendingResponse.fireAttackState.sourceId;
+      if (pendingResponse.fireAttackState.waitingForTarget) {
+        // 第一阶段：目标选择展示牌
+        targetPlayerId = pendingResponse.fireAttackState.targetId;
+      } else {
+        // 第二阶段：火攻使用者弃牌
+        targetPlayerId = pendingResponse.fireAttackState.sourceId;
+      }
     }
 
     const targetPlayer = gameState.players.find(p => p.id === targetPlayerId);
@@ -461,14 +469,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
         }
       }
     } else if (pendingResponse.request.responseType === ResponseType.FIRE_ATTACK) {
-      // 火攻响应 - 弃置同花色牌造成火焰伤害
-      success = engine.respondToFireAttack(targetPlayer.id, cardId);
-      if (success) {
+      // 火攻响应 - 分两个阶段
+      if (pendingResponse.fireAttackState?.waitingForTarget) {
+        // 第一阶段：目标选择展示牌
         if (cardId) {
-          const playedCard = targetPlayer.handCards.find(c => c.id === cardId);
-          logMessage = `${targetPlayer.character.name} 弃置了【${playedCard?.name || '牌'}】，对 ${gameState.players.find(p => p.id === pendingResponse.fireAttackState?.targetId)?.character.name} 造成1点火焰伤害`;
-        } else {
-          logMessage = `${targetPlayer.character.name} 选择不弃牌，火攻结束`;
+          success = engine.handleFireAttackTargetSelect(targetPlayer.id, cardId);
+          if (success) {
+            const selectedCard = targetPlayer.handCards.find(c => c.id === cardId);
+            logMessage = `${targetPlayer.character.name} 展示了手牌【${selectedCard?.name || ''}】`;
+          }
+        }
+      } else {
+        // 第二阶段：火攻使用者弃置同花色牌造成火焰伤害
+        success = engine.respondToFireAttack(targetPlayer.id, cardId);
+        if (success) {
+          if (cardId) {
+            const playedCard = targetPlayer.handCards.find(c => c.id === cardId);
+            logMessage = `${targetPlayer.character.name} 弃置了【${playedCard?.name || '牌'}】，对 ${gameState.players.find(p => p.id === pendingResponse.fireAttackState?.targetId)?.character.name} 造成1点火焰伤害`;
+          } else {
+            logMessage = `${targetPlayer.character.name} 选择不弃牌，火攻结束`;
+          }
         }
       }
     } else {

@@ -8,6 +8,8 @@ import { CardDealer } from './CardDealer';
 import { CharacterManager } from './CharacterManager';
 import { AIPlayer } from './AIPlayer';
 import { DistanceCalculator } from './DistanceCalculator';
+import { EquipmentManager } from './EquipmentManager';
+import { JudgmentManager, JudgmentType, JudgmentResult } from './JudgmentManager';
 import { DebugConfig } from '../components/DebugSetup/DebugSetup';
 
 export class GameEngine {
@@ -706,32 +708,20 @@ export class GameEngine {
     if (!card) return false;
 
     // 进行判定
-    const judgeResult = this.cardManager.draw(this.state.deck, 1);
-    if (judgeResult.cards.length === 0) {
-      console.log('牌堆已空，无法判定');
-      return false;
-    }
+    const judgeResult = this.performJudgment(player, JudgmentType.INDULGENCE);
+    if (!judgeResult) return false;
 
-    const judgeCard = judgeResult.cards[0];
-    this.state.deck = judgeResult.remaining;
-    console.log(`${player.character.name} 【乐不思蜀】判定: ${judgeCard.suit}${judgeCard.number} ${judgeCard.name}`);
-
-    // 判定结果不为红桃时生效
-    const isEffective = judgeCard.suit !== CardSuit.HEART;
-
-    // 将判定牌放入弃牌堆
-    this.state.discardPile.push(judgeCard);
     // 将乐不思蜀放入弃牌堆
     this.state.discardPile.push(card);
     player.delayedSpells.indulgence = undefined;
 
-    if (isEffective) {
+    if (judgeResult.isEffective) {
       console.log(`【乐不思蜀】生效！${player.character.name} 跳过出牌阶段`);
     } else {
       console.log(`【乐不思蜀】未生效（红桃）`);
     }
 
-    return isEffective;
+    return judgeResult.isEffective;
   }
 
   // 判定兵粮寸断
@@ -740,44 +730,20 @@ export class GameEngine {
     if (!card) return false;
 
     // 进行判定
-    const judgeResult = this.cardManager.draw(this.state.deck, 1);
-    if (judgeResult.cards.length === 0) {
-      console.log('牌堆已空，无法判定');
-      return false;
-    }
+    const judgeResult = this.performJudgment(player, JudgmentType.SUPPLY_SHORTAGE);
+    if (!judgeResult) return false;
 
-    const judgeCard = judgeResult.cards[0];
-    this.state.deck = judgeResult.remaining;
-    console.log(`${player.character.name} 【兵粮寸断】判定: ${judgeCard.suit}${judgeCard.number} ${judgeCard.name}`);
-
-    // 判定结果不为梅花时生效
-    const isEffective = judgeCard.suit !== CardSuit.CLUB;
-
-    // 通知前端显示判定动画
-    this.actionListeners.forEach(listener => listener({
-      action: GameAction.JUDGE,
-      playerId: player.id,
-      cardId: judgeCard.id,
-      cardName: judgeCard.name,
-      judgeType: 'supply_shortage',
-      judgeCard: judgeCard,
-      isEffective: isEffective,
-      logMessage: `${player.character.name} 【兵粮寸断】判定: ${judgeCard.suit}${judgeCard.number} ${judgeCard.name}，${isEffective ? '生效' : '未生效（梅花）'}`,
-    }));
-
-    // 将判定牌放入弃牌堆
-    this.state.discardPile.push(judgeCard);
     // 将兵粮寸断放入弃牌堆
     this.state.discardPile.push(card);
     player.delayedSpells.supplyShortage = undefined;
 
-    if (isEffective) {
+    if (judgeResult.isEffective) {
       console.log(`【兵粮寸断】生效！${player.character.name} 跳过摸牌阶段`);
     } else {
       console.log(`【兵粮寸断】未生效（梅花）`);
     }
 
-    return isEffective;
+    return judgeResult.isEffective;
   }
 
   // 判定闪电
@@ -786,24 +752,10 @@ export class GameEngine {
     if (!card) return;
 
     // 进行判定
-    const judgeResult = this.cardManager.draw(this.state.deck, 1);
-    if (judgeResult.cards.length === 0) {
-      console.log('牌堆已空，无法判定');
-      return;
-    }
+    const judgeResult = this.performJudgment(player, JudgmentType.LIGHTNING);
+    if (!judgeResult) return;
 
-    const judgeCard = judgeResult.cards[0];
-    this.state.deck = judgeResult.remaining;
-    console.log(`${player.character.name} 【闪电】判定: ${judgeCard.suit}${judgeCard.number} ${judgeCard.name}`);
-
-    // 将判定牌放入弃牌堆
-    this.state.discardPile.push(judgeCard);
-
-    // 判定结果为黑桃2-9时生效
-    const isEffective = judgeCard.suit === CardSuit.SPADE &&
-      judgeCard.number >= 2 && judgeCard.number <= 9;
-
-    if (isEffective) {
+    if (judgeResult.isEffective) {
       console.log(`【闪电】生效！${player.character.name} 受到3点雷电伤害`);
       // 将闪电放入弃牌堆
       this.state.discardPile.push(card);
@@ -819,6 +771,50 @@ export class GameEngine {
       nextPlayer.delayedSpells.lightning = card;
       console.log(`【闪电】移动到 ${nextPlayer.character.name} 的判定区`);
     }
+  }
+
+  /**
+   * 执行通用判定
+   * @param player 进行判定的玩家
+   * @param judgeType 判定类型
+   * @returns 判定结果，如果牌堆已空则返回 null
+   */
+  private performJudgment(player: Player, judgeType: JudgmentType): JudgmentResult | null {
+    // 从牌堆顶摸一张判定牌
+    const drawResult = this.cardManager.draw(this.state.deck, 1);
+    if (drawResult.cards.length === 0) {
+      console.log('牌堆已空，无法判定');
+      return null;
+    }
+
+    const judgeCard = drawResult.cards[0];
+    this.state.deck = drawResult.remaining;
+
+    // 使用 JudgmentManager 执行判定逻辑
+    const judgmentResult = JudgmentManager.executeJudgment({
+      player,
+      judgeType,
+      judgeCard,
+    });
+
+    console.log(judgmentResult.message);
+
+    // 通知前端显示判定动画
+    this.actionListeners.forEach(listener => listener({
+      action: GameAction.JUDGE,
+      playerId: player.id,
+      cardId: judgeCard.id,
+      cardName: judgeCard.name,
+      judgeType: judgeType,
+      judgeCard: judgeCard,
+      isEffective: judgmentResult.isEffective,
+      logMessage: judgmentResult.message,
+    }));
+
+    // 将判定牌放入弃牌堆
+    this.state.discardPile.push(judgeCard);
+
+    return judgmentResult;
   }
 
   // 摸牌阶段
@@ -1019,6 +1015,15 @@ export class GameEngine {
         // 如果是AI被攻击，自动响应
         if (target.isAI) {
           this.processAIResponse(target);
+        } else {
+          // 人类玩家：检查是否装备八卦阵，如果是则触发判定
+          if (EquipmentManager.canTriggerBaGua(target)) {
+            console.log(`${target.character.name} 装备【八卦阵】，触发判定`);
+            // 延迟一点触发，让玩家看到判定过程
+            setTimeout(() => {
+              this.triggerBaGuaJudgment(target);
+            }, 500);
+          }
         }
 
         return true;
@@ -1184,8 +1189,16 @@ export class GameEngine {
 
     // 处理第一个目标的响应
     const firstTarget = this.state.players.find(p => p.id === multiTargetQueue[0].targetPlayerId);
-    if (firstTarget?.isAI) {
-      this.processAIResponse(firstTarget);
+    if (firstTarget) {
+      if (firstTarget.isAI) {
+        this.processAIResponse(firstTarget);
+      } else if (responseType === ResponseType.DODGE && EquipmentManager.canTriggerBaGua(firstTarget)) {
+        // 人类玩家装备八卦阵，触发判定
+        console.log(`${firstTarget.character.name} 装备【八卦阵】，触发判定`);
+        setTimeout(() => {
+          this.triggerBaGuaJudgment(firstTarget);
+        }, 500);
+      }
     }
   }
 
@@ -1213,74 +1226,15 @@ export class GameEngine {
           return false;
         }
 
-        // 目标随机展示一张手牌
-        const shownCardIndex = Math.floor(Math.random() * fireTarget.handCards.length);
-        const shownCard = fireTarget.handCards[shownCardIndex];
-
-        console.log(`${fireTarget.character.name} 展示了手牌 [${shownCard.suit}${shownCard.number} ${shownCard.name}]`);
-
-        // 检查使用者是否有同花色的手牌
-        // 注意：此时火攻牌已经被从手牌中移除（在 playCard 中），所以不需要排除
-        const sameSuitCards = player.handCards.filter(c =>
-          c.suit === shownCard.suit
-        );
-
-        if (sameSuitCards.length === 0) {
-          console.log(`${player.character.name} 没有 ${shownCard.suit} 花色的手牌，无法造成伤害`);
-
-          // 通知前端显示详细日志（标记为效果结果，避免重复记录）
-          console.log('[GameEngine] 火攻（无同花色）：发送 shownCard', shownCard);
-          this.actionListeners.forEach(listener => listener({
-            action: GameAction.PLAY_CARD,
-            playerId: player.id,
-            cardId: card.id,
-            cardName: card.name,
-            targetIds: [fireTarget.id],
-            logMessage: `${player.character.name} 对 ${fireTarget.character.name} 使用了【火攻】，${fireTarget.character.name} 展示了 [${shownCard.suit}${shownCard.number} ${shownCard.name}]，但 ${player.character.name} 没有同花色手牌`,
-            isEffectResult: true,
-            fireAttackShownCard: shownCard,
-          }));
-
-          // 进入火攻提示阶段，显示没有同花色手牌的提示
-          this.state.phase = GamePhase.RESPONSE;
-          this.state.pendingResponse = {
-            request: {
-              targetPlayerId: player.id,
-              sourcePlayerId: fireTarget.id,
-              cardName: '火攻',
-              responseCardName: '无同花色手牌',
-              damage: 0,
-              responseType: ResponseType.FIRE_ATTACK,
-            },
-            resolved: false,
-            result: false,
-            fireAttackState: {
-              sourceId: player.id,
-              targetId: fireTarget.id,
-              shownCard: shownCard,
-              noSameSuit: true, // 标记没有同花色手牌
-            },
-          };
-
-          // 如果是AI使用，自动结束火攻
-          if (player.isAI) {
-            setTimeout(() => {
-              this.resolveFireAttackNoDamage();
-            }, 1500);
-          }
-
-          return true; // 火攻仍然算使用成功，只是没有伤害
-        }
-
-        // 进入火攻响应阶段
+        // 进入火攻第一阶段：等待目标选择展示牌
         this.state.phase = GamePhase.RESPONSE;
         this.state.pendingResponse = {
           request: {
-            targetPlayerId: player.id,
-            sourcePlayerId: fireTarget.id,
+            targetPlayerId: fireTarget.id,  // 目标需要响应（选择展示牌）
+            sourcePlayerId: player.id,
             cardName: '火攻',
-            responseCardName: `弃置一张${shownCard.suit}花色的手牌造成火焰伤害`,
-            damage: 1,
+            responseCardName: '选择一张手牌展示',
+            damage: 0,
             responseType: ResponseType.FIRE_ATTACK,
           },
           resolved: false,
@@ -1288,28 +1242,24 @@ export class GameEngine {
           fireAttackState: {
             sourceId: player.id,
             targetId: fireTarget.id,
-            shownCard: shownCard,
+            waitingForTarget: true,  // 标记正在等待目标选择
           },
         };
 
-        // 通知前端进入火攻响应阶段（标记为效果结果，避免重复记录）
-        console.log('[GameEngine] 火攻（有同花色）：发送 shownCard', shownCard);
+        // 通知前端进入火攻选择阶段
         this.actionListeners.forEach(listener => listener({
           action: GameAction.PLAY_CARD,
           playerId: player.id,
           cardId: card.id,
           cardName: card.name,
           targetIds: [fireTarget.id],
-          logMessage: `${player.character.name} 对 ${fireTarget.character.name} 使用了【火攻】，${fireTarget.character.name} 展示了 [${shownCard.suit}${shownCard.number} ${shownCard.name}]`,
+          logMessage: `${player.character.name} 对 ${fireTarget.character.name} 使用了【火攻】，等待 ${fireTarget.character.name} 选择一张手牌展示`,
           isEffectResult: true,
-          fireAttackShownCard: shownCard,
         }));
 
-        // 如果是AI使用，自动选择一张同花色牌弃置
-        if (player.isAI) {
-          setTimeout(() => {
-            this.processFireAttackResponse(player, shownCard.suit);
-          }, 1000);
+        // 如果是AI目标，自动选择一张手牌展示
+        if (fireTarget.isAI) {
+          this.processAIFireAttackTargetSelect(fireTarget);
         }
 
         return true;
@@ -2340,6 +2290,35 @@ export class GameEngine {
     const isMultiTarget = pendingResponse.multiTargetQueue && pendingResponse.currentTargetIndex !== undefined;
 
     if (cardId) {
+      // 处理八卦阵判定成功的情况
+      if (cardId === 'bagua') {
+        const logMessage = `${targetPlayer.character.name} 的【八卦阵】判定成功，视为打出【闪】，抵消了【${pendingResponse.request.cardName}】`;
+        console.log(logMessage);
+
+        if (isMultiTarget) {
+          return this.handleMultiTargetResponse(pendingResponse, targetPlayer.id, cardId, true, logMessage);
+        } else {
+          pendingResponse.resolved = true;
+          pendingResponse.result = true;
+          pendingResponse.responseCardId = cardId;
+
+          this.state.pendingResponse = undefined;
+          this.state.phase = GamePhase.PLAY;
+
+          this.actionListeners.forEach(listener => listener({
+            action: GameAction.PLAY_CARD,
+            playerId: targetPlayer.id,
+            cardId: cardId,
+            cardName: '八卦阵',
+            targetIds: [sourcePlayer.id],
+            isResponse: true,
+            logMessage: logMessage,
+          }));
+
+          return true;
+        }
+      }
+
       // 玩家打出了响应牌
       const responseCard = targetPlayer.handCards.find(c => c.id === cardId);
       if (!responseCard) {
@@ -2495,11 +2474,20 @@ export class GameEngine {
       pendingResponse.result = false;
       pendingResponse.responseCardId = undefined;
 
-      // 如果是AI，自动响应
-      if (nextTarget?.isAI) {
-        setTimeout(() => {
-          this.processAIResponse(nextTarget);
-        }, 800);
+      // 处理下一个目标的响应
+      if (nextTarget) {
+        if (nextTarget.isAI) {
+          setTimeout(() => {
+            this.processAIResponse(nextTarget);
+          }, 800);
+        } else if (pendingResponse.request.responseType === ResponseType.DODGE &&
+                   EquipmentManager.canTriggerBaGua(nextTarget)) {
+          // 人类玩家装备八卦阵，触发判定
+          console.log(`${nextTarget.character.name} 装备【八卦阵】，触发判定`);
+          setTimeout(() => {
+            this.triggerBaGuaJudgment(nextTarget);
+          }, 800);
+        }
       }
 
       return true;
@@ -2550,6 +2538,14 @@ export class GameEngine {
 
     console.log(`AI ${targetPlayer.character.name} 正在考虑是否响应...`);
 
+    // 检查是否需要闪响应，且装备八卦阵
+    if (pendingResponse.request.responseCardName === BasicCardName.DODGE &&
+        EquipmentManager.canTriggerBaGua(targetPlayer)) {
+      console.log(`AI ${targetPlayer.character.name} 装备【八卦阵】，触发判定`);
+      this.triggerBaGuaJudgment(targetPlayer);
+      return;
+    }
+
     // AI检查手牌中是否有可以响应的牌
     let responseCard: Card | undefined;
 
@@ -2594,6 +2590,39 @@ export class GameEngine {
       // 注意：监听器由 store.respondToAttack 统一处理，避免重复通知
       this.respondToAttack(targetPlayer.id);
     }, 1000);
+  }
+
+  /**
+   * 触发八卦阵判定
+   */
+  private triggerBaGuaJudgment(player: Player): void {
+    // 使用通用的 performJudgment 方法执行八卦阵判定
+    const result = this.performJudgment(player, JudgmentType.BA_GUA);
+    
+    if (!result) {
+      console.log('牌堆已空，无法判定');
+      this.respondToAttack(player.id);
+      return;
+    }
+
+    if (result.success) {
+      // 判定成功，视为打出闪
+      this.respondToAttack(player.id, 'bagua'); // 使用特殊ID表示八卦阵效果
+    } else {
+      // 判定失败，继续检查是否有闪
+      const dodgeCard = player.handCards.find(c => c.name === BasicCardName.DODGE);
+      if (dodgeCard && Math.random() < 0.8) {
+        setTimeout(() => {
+          console.log(`${player.character.name} 八卦阵判定失败，选择打出【闪】`);
+          this.respondToAttack(player.id, dodgeCard.id);
+        }, 500);
+      } else {
+        setTimeout(() => {
+          console.log(`${player.character.name} 八卦阵判定失败且无【闪】，受到伤害`);
+          this.respondToAttack(player.id);
+        }, 500);
+      }
+    }
   }
 
   // 获取待处理的响应
@@ -2794,8 +2823,133 @@ export class GameEngine {
     }, 1000);
   }
 
-  // 火攻响应处理（AI弃置同花色牌）
-  private processFireAttackResponse(player: Player, requiredSuit: string): void {
+  // AI目标选择展示牌
+  private processAIFireAttackTargetSelect(targetPlayer: Player): void {
+    const pendingResponse = this.state.pendingResponse;
+    if (!pendingResponse || !pendingResponse.fireAttackState) return;
+
+    console.log(`AI ${targetPlayer.character.name} 正在选择展示牌...`);
+
+    // AI策略：优先选择花色较少的牌，降低对方有同花色的概率
+    // 统计各花色的牌数
+    const suitCounts: Record<string, number> = {};
+    targetPlayer.handCards.forEach(card => {
+      suitCounts[card.suit] = (suitCounts[card.suit] || 0) + 1;
+    });
+
+    // 找到数量最少的花色
+    let minCount = Infinity;
+    let selectedCard = targetPlayer.handCards[0];
+
+    targetPlayer.handCards.forEach(card => {
+      if (suitCounts[card.suit] < minCount) {
+        minCount = suitCounts[card.suit];
+        selectedCard = card;
+      }
+    });
+
+    setTimeout(() => {
+      console.log(`AI ${targetPlayer.character.name} 选择展示【${selectedCard.name}】`);
+      this.handleFireAttackTargetSelect(targetPlayer.id, selectedCard.id);
+    }, 1000);
+  }
+
+  // 处理目标选择展示牌
+  public handleFireAttackTargetSelect(targetPlayerId: string, cardId: string): boolean {
+    const pendingResponse = this.state.pendingResponse;
+    if (!pendingResponse || !pendingResponse.fireAttackState) {
+      console.log('没有待处理的火攻选择');
+      return false;
+    }
+
+    const { sourceId, targetId, waitingForTarget } = pendingResponse.fireAttackState;
+
+    // 检查是否是目标玩家
+    if (targetPlayerId !== targetId) {
+      console.log('不是火攻目标，无法选择');
+      return false;
+    }
+
+    // 检查是否正在等待目标选择
+    if (!waitingForTarget) {
+      console.log('火攻不处于等待目标选择阶段');
+      return false;
+    }
+
+    const targetPlayer = this.state.players.find(p => p.id === targetId);
+    const sourcePlayer = this.state.players.find(p => p.id === sourceId);
+
+    if (!targetPlayer || !sourcePlayer) {
+      console.log('找不到玩家');
+      return false;
+    }
+
+    // 找到选择的牌
+    const selectedCard = targetPlayer.handCards.find(c => c.id === cardId);
+    if (!selectedCard) {
+      console.log('找不到选择的牌');
+      return false;
+    }
+
+    console.log(`${targetPlayer.character.name} 展示了手牌 [${selectedCard.suit}${selectedCard.number} ${selectedCard.name}]`);
+
+    // 检查火攻使用者是否有同花色的手牌
+    const sameSuitCards = sourcePlayer.handCards.filter(c => c.suit === selectedCard.suit);
+
+    if (sameSuitCards.length === 0) {
+      // 没有同花色手牌，火攻结束
+      console.log(`${sourcePlayer.character.name} 没有 ${selectedCard.suit} 花色的手牌，无法造成伤害`);
+
+      // 通知前端
+      this.actionListeners.forEach(listener => listener({
+        action: GameAction.PLAY_CARD,
+        playerId: sourcePlayer.id,
+        cardName: '火攻',
+        targetIds: [targetId],
+        logMessage: `${targetPlayer.character.name} 展示了 [${selectedCard.suit}${selectedCard.number} ${selectedCard.name}]，但 ${sourcePlayer.character.name} 没有同花色手牌`,
+        isEffectResult: true,
+        fireAttackShownCard: selectedCard,
+      }));
+
+      // 清除火攻状态，返回出牌阶段
+      this.state.pendingResponse = undefined;
+      this.state.phase = GamePhase.PLAY;
+
+      return true;
+    }
+
+    // 进入火攻第二阶段：等待火攻使用者弃牌
+    pendingResponse.request.targetPlayerId = sourceId;  // 现在轮到火攻使用者响应
+    pendingResponse.request.responseCardName = `弃置一张${selectedCard.suit}花色的手牌造成火焰伤害`;
+    pendingResponse.request.damage = 1;
+    pendingResponse.fireAttackState = {
+      sourceId,
+      targetId,
+      shownCard: selectedCard,
+      waitingForTarget: false,  // 不再等待目标
+    };
+
+    // 通知前端
+    this.actionListeners.forEach(listener => listener({
+      action: GameAction.PLAY_CARD,
+      playerId: sourcePlayer.id,
+      cardName: '火攻',
+      targetIds: [targetId],
+      logMessage: `${targetPlayer.character.name} 展示了 [${selectedCard.suit}${selectedCard.number} ${selectedCard.name}]，${sourcePlayer.character.name} 可选择弃置同花色手牌造成火焰伤害`,
+      isEffectResult: true,
+      fireAttackShownCard: selectedCard,
+    }));
+
+    // 如果是AI使用，自动选择
+    if (sourcePlayer.isAI) {
+      this.processAIFireAttackResponse(sourcePlayer, selectedCard.suit);
+    }
+
+    return true;
+  }
+
+  // AI火攻响应（弃置同花色牌）
+  private processAIFireAttackResponse(player: Player, requiredSuit: string): void {
     const pendingResponse = this.state.pendingResponse;
     if (!pendingResponse || !pendingResponse.fireAttackState) return;
 
@@ -2839,6 +2993,11 @@ export class GameEngine {
 
     if (!player || player.id !== sourceId) {
       console.log('不是火攻使用者，无法响应');
+      return false;
+    }
+
+    if (!shownCard) {
+      console.log('火攻状态中没有展示牌');
       return false;
     }
 
@@ -2900,7 +3059,7 @@ export class GameEngine {
     const player = this.state.players.find(p => p.id === sourceId);
     const target = this.state.players.find(p => p.id === targetId);
 
-    if (player && target) {
+    if (player && target && shownCard) {
       console.log(`${player.character.name} 没有 ${shownCard.suit} 花色的手牌，火攻结束，未造成伤害`);
 
       // 通知前端

@@ -1,5 +1,6 @@
 import { Player, Card, CardSuit, BasicCardName, SpellCardName } from '../types/game';
 import { GameEngine } from './GameEngine';
+import { JudgmentManager, JudgmentType, JudgmentResult } from './JudgmentManager';
 
 /**
  * 装备效果管理器
@@ -108,11 +109,35 @@ export class EquipmentManager {
   // ==================== 防具效果 ====================
 
   /**
-   * 八卦阵：需要进行判定的【闪】
-   * 在需要打出【闪】时触发
+   * 八卦阵：是否可触发判定
+   * 在需要打出【闪】时检查
    */
   static canTriggerBaGua(player: Player): boolean {
     return player.equipment.armor?.name === '八卦阵';
+  }
+
+  /**
+   * 八卦阵：执行判定
+   * 使用 JudgmentManager 进行统一判定
+   * @param player 装备八卦阵的玩家
+   * @param judgeCard 判定牌
+   * @returns 判定结果
+   */
+  static executeBaGuaJudgment(player: Player, judgeCard: Card): JudgmentResult {
+    // 使用 JudgmentManager 执行八卦阵判定
+    return JudgmentManager.executeJudgment({
+      player,
+      judgeType: JudgmentType.BA_GUA,
+      judgeCard,
+    });
+  }
+
+  /**
+   * 获取判定类型
+   * 用于统一判定动画显示
+   */
+  static getBaGuaJudgmentType(): JudgmentType {
+    return JudgmentType.BA_GUA;
   }
 
   /**

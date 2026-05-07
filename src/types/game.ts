@@ -41,6 +41,7 @@ export enum SpellCardName {
   DRAW_TWO = '无中生有',
   NULLIFICATION = '无懈可击',
   GRAIN = '五谷丰登',
+  IRON_CHAIN = '铁索连环',
   // 延时锦囊牌
   INDULGENCE = '乐不思蜀',
   SUPPLY_SHORTAGE = '兵粮寸断',
@@ -232,8 +233,9 @@ export interface DuelState {
 export interface FireAttackState {
   sourceId: string;            // 火攻使用者ID
   targetId: string;            // 火攻目标ID
-  shownCard: Card;             // 目标展示的手牌
+  shownCard?: Card;            // 目标展示的手牌（选择后填充）
   noSameSuit?: boolean;        // 是否没有同花色手牌（用于提示）
+  waitingForTarget?: boolean;  // 是否正在等待目标选择展示牌
 }
 
 // 待处理的响应

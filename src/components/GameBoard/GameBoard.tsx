@@ -90,7 +90,7 @@ const isValidResponseCard = (card: GameCard, responseType: ResponseType, pending
       return card.name === SpellCardName.NULLIFICATION;
     case ResponseType.FIRE_ATTACK:
       // 火攻响应：需要弃置与展示牌同花色的手牌
-      if (!pendingResponse?.fireAttackState) return false;
+      if (!pendingResponse?.fireAttackState?.shownCard) return false;
       return card.suit === pendingResponse.fireAttackState.shownCard.suit;
     default:
       return false;
@@ -536,12 +536,13 @@ export const GameBoard: React.FC = () => {
         }
       }
 
-      // 处理判定动画（兵粮寸断、乐不思蜀、闪电）
+      // 处理判定动画（兵粮寸断、乐不思蜀、闪电、八卦阵等）
       if (action.action === 'judge' && action.judgeCard) {
         const judgeTypeNames: Record<string, string> = {
           'supply_shortage': '兵粮寸断',
           'indulgence': '乐不思蜀',
           'lightning': '闪电',
+          'ba_gua': '八卦阵',
         };
         const judgeTypeName = judgeTypeNames[action.judgeType || ''] || '判定';
 
@@ -1382,6 +1383,9 @@ export const GameBoard: React.FC = () => {
                   {judgeAnimation.judgeType === 'lightning' && (
                     judgeAnimation.isEffective ? '受到3点雷电伤害' : '闪电转移给下家'
                   )}
+                  {judgeAnimation.judgeType === 'ba_gua' && (
+                    judgeAnimation.isEffective ? '视为打出【闪】' : '判定失败'
+                  )}
                 </div>
               </div>
             </div>
@@ -1570,49 +1574,86 @@ export const GameBoard: React.FC = () => {
                       const pendingResponse = gameState.pendingResponse;
                       const fireAttackState = pendingResponse?.fireAttackState;
                       const isSource = fireAttackState?.sourceId === humanPlayer.id;
+                      const isTarget = fireAttackState?.targetId === humanPlayer.id;
                       const shownCard = fireAttackState?.shownCard;
+                      const isWaitingForTarget = fireAttackState?.waitingForTarget;
                       const hasSameSuit = humanPlayer.handCards.some(c => c.suit === shownCard?.suit);
 
-                      return isSource ? (
-                        // 火攻使用者：选择是否弃置同花色牌造成伤害
-                        <>
-                          <div className="response-notice-text">
-                            【火攻】目标展示了 <span style={{ color: '#ff5722' }}>{shownCard?.suit}{shownCard?.number} {shownCard?.name}</span>
-                          </div>
-                          <div className="response-notice-hint">
-                            {hasSameSuit 
-                              ? `请弃置一张${shownCard?.suit}花色的手牌，对目标造成1点火焰伤害`
-                              : '你没有同花色的手牌，无法造成伤害'
-                            }
-                          </div>
-                          <div className="response-notice-buttons">
-                            <button
-                              className="action-btn btn-confirm"
-                              onClick={() => {
-                                if (selectedResponseCard) {
-                                  respondToAttack(selectedResponseCard);
+                      // 第一阶段：目标选择展示牌
+                      if (isWaitingForTarget && isTarget) {
+                        return (
+                          <>
+                            <div className="response-notice-text">
+                              【火攻】请选择一张手牌展示
+                            </div>
+                            <div className="response-notice-hint">
+                              点击选择一张手牌，展示给火攻使用者看
+                            </div>
+                            <div className="response-notice-buttons">
+                              <button
+                                className="action-btn btn-confirm"
+                                onClick={() => {
+                                  if (selectedResponseCard) {
+                                    respondToAttack(selectedResponseCard);
+                                    setSelectedResponseCard(null);
+                                  }
+                                }}
+                                disabled={!selectedResponseCard}
+                              >
+                                确定展示
+                              </button>
+                            </div>
+                          </>
+                        );
+                      }
+
+                      // 第二阶段：火攻使用者选择是否弃牌
+                      if (isSource && !isWaitingForTarget) {
+                        return (
+                          <>
+                            <div className="response-notice-text">
+                              【火攻】目标展示了 <span style={{ color: '#ff5722' }}>{shownCard?.suit}{shownCard?.number} {shownCard?.name}</span>
+                            </div>
+                            <div className="response-notice-hint">
+                              {hasSameSuit 
+                                ? `请弃置一张${shownCard?.suit}花色的手牌，对目标造成1点火焰伤害`
+                                : '你没有同花色的手牌，无法造成伤害'
+                              }
+                            </div>
+                            <div className="response-notice-buttons">
+                              <button
+                                className="action-btn btn-confirm"
+                                onClick={() => {
+                                  if (selectedResponseCard) {
+                                    respondToAttack(selectedResponseCard);
+                                    setSelectedResponseCard(null);
+                                  }
+                                }}
+                                disabled={!selectedResponseCard}
+                              >
+                                确定
+                              </button>
+                              <button
+                                className="action-btn btn-cancel"
+                                onClick={() => {
                                   setSelectedResponseCard(null);
-                                }
-                              }}
-                              disabled={!selectedResponseCard}
-                            >
-                              确定
-                            </button>
-                            <button
-                              className="action-btn btn-cancel"
-                              onClick={() => {
-                                setSelectedResponseCard(null);
-                                respondToAttack();
-                              }}
-                            >
-                              取消
-                            </button>
-                          </div>
-                        </>
-                      ) : (
-                        // 等待火攻使用者决策
+                                  respondToAttack();
+                                }}
+                              >
+                                取消
+                              </button>
+                            </div>
+                          </>
+                        );
+                      }
+
+                      // 等待状态
+                      return (
                         <div className="response-notice-text">
-                          等待 {gameState.players.find(p => p.id === fireAttackState?.sourceId)?.character.name} 决策【火攻】...
+                          {isWaitingForTarget 
+                            ? `等待目标选择展示牌...`
+                            : `等待 ${gameState.players.find(p => p.id === fireAttackState?.sourceId)?.character.name} 决策【火攻】...`
+                          }
                         </div>
                       );
                     })()}

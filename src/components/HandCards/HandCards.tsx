@@ -196,16 +196,25 @@ export const HandCards: React.FC<HandCardsProps> = ({
           humanPlayer &&
           pendingResponse.request.sourcePlayerId !== humanPlayer.id;
 
-        // 火攻响应阶段：火攻使用者选择是否弃置同花色手牌造成伤害
+        // 火攻第一阶段：目标选择展示牌
+        const isFireAttackTargetSelect = isResponsePhase &&
+          pendingResponse?.request.responseType === 'fire_attack' &&
+          humanPlayer &&
+          pendingResponse.fireAttackState &&
+          pendingResponse.fireAttackState.waitingForTarget &&
+          pendingResponse.fireAttackState.targetId === humanPlayer.id;
+
+        // 火攻第二阶段：火攻使用者选择是否弃置同花色手牌造成伤害
         const isFireAttackResponse = isResponsePhase &&
           pendingResponse?.request.responseType === 'fire_attack' &&
           humanPlayer &&
           pendingResponse.fireAttackState &&
+          !pendingResponse.fireAttackState.waitingForTarget &&
           pendingResponse.fireAttackState.sourceId === humanPlayer.id &&
           pendingResponse.fireAttackState.shownCard &&
           card.suit === pendingResponse.fireAttackState.shownCard.suit;
 
-        const isResponseCard = isDodgeResponse || isDuelResponse || isAttackResponse || isNullifyResponse || isFireAttackResponse;
+        const isResponseCard = isDodgeResponse || isDuelResponse || isAttackResponse || isNullifyResponse || isFireAttackTargetSelect || isFireAttackResponse;
 
         // 濒死阶段：只能选择桃或酒
         const isDyingCard = isDyingPhase &&

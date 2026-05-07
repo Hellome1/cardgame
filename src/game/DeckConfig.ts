@@ -153,7 +153,7 @@ export const basicCards: CardDefinition[] = [
   ...wines,
 ];
 
-// 锦囊牌 (42张)
+// 锦囊牌 (48张)
 export const spellCards: CardDefinition[] = [
   // 无中生有 4张: ♥7、♥8、♥9、♥J
   { name: SpellCardName.DRAW_TWO, suit: CardSuit.HEART, number: 7, type: 'spell', description: '出牌阶段，对你使用。你摸两张牌。' },
@@ -200,6 +200,13 @@ export const spellCards: CardDefinition[] = [
   // 五谷丰登 2张: ♥3、♥4
   { name: SpellCardName.GRAIN, suit: CardSuit.HEART, number: 3, type: 'spell', description: '出牌阶段，对所有角色使用。你从牌堆顶亮出等同于角色数量的牌，每名目标角色获得其中一张。' },
   { name: SpellCardName.GRAIN, suit: CardSuit.HEART, number: 4, type: 'spell', description: '出牌阶段，对所有角色使用。你从牌堆顶亮出等同于角色数量的牌，每名目标角色获得其中一张。' },
+  // 铁索连环 6张: ♠J、♠Q、♣J、♣Q、♦J、♦Q
+  { name: SpellCardName.IRON_CHAIN, suit: CardSuit.SPADE, number: 11, type: 'spell', description: '出牌阶段，对一至两名角色使用。横置或重置这些角色的武将牌（被横置的角色处于"连环状态"）。当处于连环状态的一名角色受到属性伤害（火焰或雷电伤害）时，其他处于连环状态的角色依次受到同来源、同属性、同伤害值的伤害，然后重置所有受到该伤害角色的武将牌。' },
+  { name: SpellCardName.IRON_CHAIN, suit: CardSuit.SPADE, number: 12, type: 'spell', description: '出牌阶段，对一至两名角色使用。横置或重置这些角色的武将牌（被横置的角色处于"连环状态"）。当处于连环状态的一名角色受到属性伤害（火焰或雷电伤害）时，其他处于连环状态的角色依次受到同来源、同属性、同伤害值的伤害，然后重置所有受到该伤害角色的武将牌。' },
+  { name: SpellCardName.IRON_CHAIN, suit: CardSuit.CLUB, number: 11, type: 'spell', description: '出牌阶段，对一至两名角色使用。横置或重置这些角色的武将牌（被横置的角色处于"连环状态"）。当处于连环状态的一名角色受到属性伤害（火焰或雷电伤害）时，其他处于连环状态的角色依次受到同来源、同属性、同伤害值的伤害，然后重置所有受到该伤害角色的武将牌。' },
+  { name: SpellCardName.IRON_CHAIN, suit: CardSuit.CLUB, number: 12, type: 'spell', description: '出牌阶段，对一至两名角色使用。横置或重置这些角色的武将牌（被横置的角色处于"连环状态"）。当处于连环状态的一名角色受到属性伤害（火焰或雷电伤害）时，其他处于连环状态的角色依次受到同来源、同属性、同伤害值的伤害，然后重置所有受到该伤害角色的武将牌。' },
+  { name: SpellCardName.IRON_CHAIN, suit: CardSuit.DIAMOND, number: 11, type: 'spell', description: '出牌阶段，对一至两名角色使用。横置或重置这些角色的武将牌（被横置的角色处于"连环状态"）。当处于连环状态的一名角色受到属性伤害（火焰或雷电伤害）时，其他处于连环状态的角色依次受到同来源、同属性、同伤害值的伤害，然后重置所有受到该伤害角色的武将牌。' },
+  { name: SpellCardName.IRON_CHAIN, suit: CardSuit.DIAMOND, number: 12, type: 'spell', description: '出牌阶段，对一至两名角色使用。横置或重置这些角色的武将牌（被横置的角色处于"连环状态"）。当处于连环状态的一名角色受到属性伤害（火焰或雷电伤害）时，其他处于连环状态的角色依次受到同来源、同属性、同伤害值的伤害，然后重置所有受到该伤害角色的武将牌。' },
   // 乐不思蜀 3张: ♠6、♥6、♣6
   { name: SpellCardName.INDULGENCE, suit: CardSuit.SPADE, number: 6, type: 'spell', description: '出牌阶段，对一名其他角色使用。将【乐不思蜀】置于该角色的判定区里。该角色的判定阶段，需进行判定：若结果不为红桃，则跳过其出牌阶段。' },
   { name: SpellCardName.INDULGENCE, suit: CardSuit.HEART, number: 6, type: 'spell', description: '出牌阶段，对一名其他角色使用。将【乐不思蜀】置于该角色的判定区里。该角色的判定阶段，需进行判定：若结果不为红桃，则跳过其出牌阶段。' },
@@ -261,7 +268,7 @@ export function validateDeck(): { isValid: boolean; total: number; counts: Recor
   };
 
   return {
-    isValid: counts.total === 154,
+    isValid: counts.total === 160,
     total: counts.total,
     counts: {
       '基本牌': counts.basic,
