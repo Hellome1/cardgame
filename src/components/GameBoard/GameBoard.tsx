@@ -4,6 +4,7 @@ import { Card } from '../Card/Card';
 import { PlayerAvatar } from '../PlayerAvatar/PlayerAvatar';
 import { HandCards } from '../HandCards/HandCards';
 import { DebugSetup, DebugConfig } from '../DebugSetup/DebugSetup';
+import { ResponseNotice, WaitingNotice } from './ResponseNotice';
 import { GamePhase, Identity, CardType, CardSuit, CardColor, SpellCardName, BasicCardName, ResponseType, Card as GameCard, PendingResponse } from '../../types/game';
 import { DistanceCalculator } from '../../game/DistanceCalculator';
 import './GameBoard.css';
@@ -1471,6 +1472,57 @@ export const GameBoard: React.FC = () => {
             </div>
           )}
 
+          {/* 等待状态提示 - 牌桌中间展示（层级较低） */}
+          {(() => {
+            // 只在特定情况下显示等待提示
+            if (!currentPlayer.isAI) return null;
+
+            let waitingMessage = '';
+            const aiPlayerName = currentPlayer.character.name;
+            const phase = gameState.phase;
+
+            if (phase === GamePhase.PLAY) {
+              waitingMessage = `等待 ${aiPlayerName} 出牌...`;
+            } else if (phase === GamePhase.DISCARD) {
+              waitingMessage = `等待 ${aiPlayerName} 弃牌...`;
+            } else if (phase === GamePhase.JUDGMENT) {
+              waitingMessage = `等待 ${aiPlayerName} 判定...`;
+            } else if (phase === GamePhase.DRAW) {
+              waitingMessage = `等待 ${aiPlayerName} 摸牌...`;
+            } else if (phase === GamePhase.RESPONSE) {
+              // 响应阶段等待其他玩家响应
+              const pendingResponse = gameState.pendingResponse;
+              if (pendingResponse) {
+                const targetPlayer = gameState.players.find(p => p.id === pendingResponse.request.targetPlayerId);
+                if (targetPlayer && !targetPlayer.isAI) {
+                  // 人类玩家需要响应，不显示等待
+                  return null;
+                }
+                if (targetPlayer) {
+                  waitingMessage = `等待 ${targetPlayer.character.name} 响应...`;
+                }
+              }
+            } else if (phase === GamePhase.DYING) {
+              const dyingState = gameState.dyingState;
+              if (dyingState) {
+                const dyingPlayer = gameState.players.find(p => p.id === dyingState.playerId);
+                if (dyingPlayer && !dyingPlayer.isAI) {
+                  // 人类玩家濒死，不显示等待
+                  return null;
+                }
+                if (dyingPlayer) {
+                  waitingMessage = `等待 ${dyingPlayer.character.name} 濒死自救...`;
+                }
+              }
+            } else {
+              return null;
+            }
+
+            if (!waitingMessage) return null;
+
+            return <WaitingNotice message={waitingMessage} />;
+          })()}
+
           {/* 技能提示面板 - 显示技能效果（如司马懿反馈） */}
           {skillNotice && (
             <div className="skill-notice-panel">
@@ -1532,18 +1584,8 @@ export const GameBoard: React.FC = () => {
             </div>
 
             <div className="hand-cards-section">
-              {/* 玩家操作区域 - 按钮和计时器 */}
+              {/* 玩家操作区域 - 提示和按钮 */}
               <div className="player-action-area">
-                {/* 计时器 */}
-                {isTimerRunning && !isPaused && (
-                  <div className="timer-container">
-                    <div className="timer-bar-wrapper">
-                      <div className="timer-bar" style={{ width: `${(timeLeft / maxTime) * 100}%` }} />
-                    </div>
-                    <span className="timer-text">{timeLeft}s</span>
-                  </div>
-                )}
-
                 {/* 出牌阶段提示 */}
                 {isHumanTurn && gameState.phase === GamePhase.PLAY && selectedCardId && (
                   (() => {
@@ -1576,6 +1618,148 @@ export const GameBoard: React.FC = () => {
                   })()
                 )}
 
+                {/* 响应阶段提示（南蛮入侵） */}
+                {gameState.phase === GamePhase.RESPONSE && gameState.pendingResponse?.request.responseType === ResponseType.ATTACK && !humanPlayer.isDead && (
+                  gameState.pendingResponse.request.targetPlayerId === humanPlayer.id ? (
+                    <ResponseNotice
+                      title={`${gameState.players.find(p => p.id === gameState.pendingResponse?.request.sourcePlayerId)?.character.name} 使用了【南蛮入侵】`}
+                      hint="请打出一张【杀】进行响应"
+                      onConfirm={() => {
+                        const attackCard = humanPlayer.handCards.find(
+                          c => c.name === BasicCardName.ATTACK ||
+                            c.name === BasicCardName.THUNDER_ATTACK ||
+                            c.name === BasicCardName.FIRE_ATTACK_CARD
+                        );
+                        if (attackCard) {
+                          respondToAttack(attackCard.id);
+                        }
+                      }}
+                      onCancel={() => respondToAttack()}
+                      confirmDisabled={!humanPlayer.handCards.some(
+                        c => c.name === BasicCardName.ATTACK ||
+                          c.name === BasicCardName.THUNDER_ATTACK ||
+                          c.name === BasicCardName.FIRE_ATTACK_CARD
+                      )}
+                      confirmText="确定"
+                      cancelText="取消"
+                    />
+                  ) : null
+                )}
+
+                {/* 响应阶段提示（万箭齐发/普通杀） */}
+                {gameState.phase === GamePhase.RESPONSE && gameState.pendingResponse?.request.responseType === ResponseType.DODGE && !humanPlayer.isDead && (
+                  gameState.pendingResponse.request.targetPlayerId === humanPlayer.id ? (
+                    <ResponseNotice
+                      title={`${gameState.players.find(p => p.id === gameState.pendingResponse?.request.sourcePlayerId)?.character.name} 使用了【${gameState.pendingResponse.request.cardName}】`}
+                      hint="请打出一张【闪】进行响应"
+                      onConfirm={() => {
+                        const dodgeCard = humanPlayer.handCards.find(c => c.name === BasicCardName.DODGE);
+                        if (dodgeCard) {
+                          respondToAttack(dodgeCard.id);
+                        }
+                      }}
+                      onCancel={() => respondToAttack()}
+                      confirmDisabled={!humanPlayer.handCards.some(c => c.name === BasicCardName.DODGE)}
+                      confirmText="确定"
+                      cancelText="取消"
+                    />
+                  ) : null
+                )}
+
+                {/* 响应阶段提示（决斗） */}
+                {gameState.phase === GamePhase.RESPONSE && gameState.pendingResponse?.request.responseType === ResponseType.DUEL && !humanPlayer.isDead && (
+                  (() => {
+                    const pendingResponse = gameState.pendingResponse;
+                    const isDuel = pendingResponse?.request.responseType === ResponseType.DUEL;
+                    const currentTurnId = isDuel && pendingResponse?.duelState
+                      ? pendingResponse.duelState.currentTurnId
+                      : pendingResponse?.request.targetPlayerId;
+                    const isCurrentPlayerTurn = currentTurnId === humanPlayer.id;
+
+                    return isCurrentPlayerTurn ? (
+                      <ResponseNotice
+                        title="【决斗】请打出一张【杀】"
+                        hint="否则受到1点伤害"
+                        onConfirm={() => {
+                          if (selectedResponseCard) {
+                            respondToAttack(selectedResponseCard);
+                            setSelectedResponseCard(null);
+                          }
+                        }}
+                        onCancel={() => {
+                          setSelectedResponseCard(null);
+                          respondToAttack();
+                        }}
+                        confirmDisabled={!selectedResponseCard}
+                        confirmText="确定"
+                        cancelText="取消"
+                      />
+                    ) : null;
+                  })()
+                )}
+
+                {/* 响应阶段提示（火攻） */}
+                {gameState.phase === GamePhase.RESPONSE && gameState.pendingResponse?.request.responseType === ResponseType.FIRE_ATTACK && !humanPlayer.isDead && (
+                  (() => {
+                    const pendingResponse = gameState.pendingResponse;
+                    const fireAttackState = pendingResponse?.fireAttackState;
+                    const isSource = fireAttackState?.sourceId === humanPlayer.id;
+                    const isTarget = fireAttackState?.targetId === humanPlayer.id;
+                    const shownCard = fireAttackState?.shownCard;
+                    const isWaitingForTarget = fireAttackState?.waitingForTarget;
+                    const hasSameSuit = humanPlayer.handCards.some(c => c.suit === shownCard?.suit);
+
+                    // 第一阶段：目标选择展示牌
+                    if (isWaitingForTarget && isTarget) {
+                      return (
+                        <ResponseNotice
+                          title="请选择一张手牌"
+                          onConfirm={() => {
+                            if (selectedResponseCard) {
+                              respondToAttack(selectedResponseCard);
+                              setSelectedResponseCard(null);
+                            }
+                          }}
+                          onCancel={() => {
+                            setSelectedResponseCard(null);
+                          }}
+                          confirmDisabled={!selectedResponseCard}
+                          confirmText="确定"
+                          cancelText="取消"
+                          showCancel={true}
+                        />
+                      );
+                    }
+
+                    // 第二阶段：火攻使用者选择是否弃牌
+                    if (isSource && !isWaitingForTarget) {
+                      return (
+                        <ResponseNotice
+                          title={hasSameSuit 
+                            ? `请弃置一张${shownCard?.suit}花色的牌，对目标造成1点火焰伤害`
+                            : '没有同花色的手牌，无法造成伤害'
+                          }
+                          onConfirm={() => {
+                            if (selectedResponseCard) {
+                              respondToAttack(selectedResponseCard);
+                              setSelectedResponseCard(null);
+                            }
+                          }}
+                          onCancel={() => {
+                            setSelectedResponseCard(null);
+                            respondToAttack();
+                          }}
+                          confirmDisabled={!selectedResponseCard || !hasSameSuit}
+                          confirmText="确定"
+                          cancelText="取消"
+                        />
+                      );
+                    }
+
+                    return null;
+                  })()
+                )}
+
                 {/* 出牌按钮 */}
                 {isHumanTurn && gameState.phase === GamePhase.PLAY && (
                   <div className="action-buttons">
@@ -1599,228 +1783,13 @@ export const GameBoard: React.FC = () => {
                   </div>
                 )}
 
-                {/* 响应阶段提示（南蛮入侵） - 放在玩家提示区 */}
-                {gameState.phase === GamePhase.RESPONSE && gameState.pendingResponse?.request.responseType === ResponseType.ATTACK && !humanPlayer.isDead && (
-                  <div className="response-notice">
-                    {gameState.pendingResponse.request.targetPlayerId === humanPlayer.id ? (
-                      // 当前玩家需要响应
-                      <>
-                        <div className="response-notice-text">
-                          <span className="response-attacker">
-                            {gameState.players.find(p => p.id === gameState.pendingResponse?.request.sourcePlayerId)?.character.name}
-                          </span>
-                          使用了【南蛮入侵】
-                        </div>
-                        <div className="response-notice-hint">
-                          请打出一张【杀】进行响应，否则受到1点伤害
-                        </div>
-                        <div className="response-notice-buttons">
-                          <button
-                            className="action-btn btn-confirm"
-                            onClick={() => {
-                              const attackCard = humanPlayer.handCards.find(
-                                c => c.name === BasicCardName.ATTACK ||
-                                  c.name === BasicCardName.THUNDER_ATTACK ||
-                                  c.name === BasicCardName.FIRE_ATTACK_CARD
-                              );
-                              if (attackCard) {
-                                respondToAttack(attackCard.id);
-                              }
-                            }}
-                            disabled={!humanPlayer.handCards.some(
-                              c => c.name === BasicCardName.ATTACK ||
-                                c.name === BasicCardName.THUNDER_ATTACK ||
-                                c.name === BasicCardName.FIRE_ATTACK_CARD
-                            )}
-                          >
-                            打出杀
-                          </button>
-                          <button
-                            className="action-btn btn-cancel"
-                            onClick={() => respondToAttack()}
-                          >
-                            不响应
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      // 等待其他玩家响应
-                      <div className="response-notice-text">
-                        等待 {gameState.players.find(p => p.id === gameState.pendingResponse?.request.targetPlayerId)?.character.name} 响应【南蛮入侵】...
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* 响应阶段提示（万箭齐发/普通杀） - 放在玩家提示区 */}
-                {gameState.phase === GamePhase.RESPONSE && gameState.pendingResponse?.request.responseType === ResponseType.DODGE && !humanPlayer.isDead && (
-                  <div className="response-notice">
-                    <DodgeResponse
-                      isWanJian={gameState.pendingResponse.request.cardName === '万箭齐发'}
-                      isTarget={gameState.pendingResponse.request.targetPlayerId === humanPlayer.id}
-                      attackerName={gameState.players.find(p => p.id === gameState.pendingResponse?.request.sourcePlayerId)?.character.name || ''}
-                      targetName={gameState.players.find(p => p.id === gameState.pendingResponse?.request.targetPlayerId)?.character.name || ''}
-                      cardName={gameState.pendingResponse.request.cardName}
-                      hasDodge={humanPlayer.handCards.some(c => c.name === BasicCardName.DODGE)}
-                      selectedResponseCard={selectedResponseCard}
-                      onRespond={respondToAttack}
-                      onSelectResponseCard={setSelectedResponseCard}
-                    />
-                  </div>
-                )}
-
-                {/* 响应阶段提示（决斗） - 放在玩家提示区 */}
-                {gameState.phase === GamePhase.RESPONSE && gameState.pendingResponse?.request.responseType === ResponseType.DUEL && !humanPlayer.isDead && (
-                  <div className="response-notice">
-                    {(() => {
-                      const pendingResponse = gameState.pendingResponse;
-                      const isDuel = pendingResponse?.request.responseType === ResponseType.DUEL;
-                      const currentTurnId = isDuel && pendingResponse?.duelState
-                        ? pendingResponse.duelState.currentTurnId
-                        : pendingResponse?.request.targetPlayerId;
-                      const isCurrentPlayerTurn = currentTurnId === humanPlayer.id;
-                      const duelState = pendingResponse?.duelState;
-                      const challenger = gameState.players.find(p => p.id === duelState?.challengerId);
-                      const target = gameState.players.find(p => p.id === duelState?.targetId);
-                      const opponent = humanPlayer.id === challenger?.id ? target : challenger;
-
-                      return isCurrentPlayerTurn ? (
-                        // 当前玩家需要出杀响应决斗
-                        <>
-                          <div className="response-notice-text">
-                            【决斗】中，请打出一张【杀】
-                          </div>
-                          <div className="response-notice-hint">
-                            否则受到1点伤害
-                          </div>
-                          <div className="response-notice-buttons">
-                            <button
-                              className="action-btn btn-confirm"
-                              onClick={() => {
-                                if (selectedResponseCard) {
-                                  respondToAttack(selectedResponseCard);
-                                  setSelectedResponseCard(null);
-                                }
-                              }}
-                              disabled={!selectedResponseCard}
-                            >
-                              确定
-                            </button>
-                            <button
-                              className="action-btn btn-cancel"
-                              onClick={() => {
-                                setSelectedResponseCard(null);
-                                respondToAttack();
-                              }}
-                            >
-                              取消
-                            </button>
-                          </div>
-                        </>
-                      ) : (
-                        // 等待对方响应
-                        <div className="response-notice-text">
-                          等待 {opponent?.character.name} 响应【决斗】...
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                {/* 响应阶段提示（火攻） - 放在玩家提示区 */}
-                {gameState.phase === GamePhase.RESPONSE && gameState.pendingResponse?.request.responseType === ResponseType.FIRE_ATTACK && !humanPlayer.isDead && (
-                  <div className="response-notice">
-                    {(() => {
-                      const pendingResponse = gameState.pendingResponse;
-                      const fireAttackState = pendingResponse?.fireAttackState;
-                      const isSource = fireAttackState?.sourceId === humanPlayer.id;
-                      const isTarget = fireAttackState?.targetId === humanPlayer.id;
-                      const shownCard = fireAttackState?.shownCard;
-                      const isWaitingForTarget = fireAttackState?.waitingForTarget;
-                      const isSelfFireAttack = fireAttackState?.isSelfFireAttack;
-                      const hasSameSuit = humanPlayer.handCards.some(c => c.suit === shownCard?.suit);
-
-                      // 第一阶段：目标选择展示牌
-                      if (isWaitingForTarget && isTarget) {
-                        return (
-                          <>
-                            <div className="response-notice-text">
-                              【火攻】{isSelfFireAttack ? '对自己使用，' : ''}请选择一张手牌展示
-                            </div>
-                            <div className="response-notice-hint">
-                              {isSelfFireAttack 
-                                ? '选择一张手牌展示，然后决定是否弃置同花色牌对自己造成伤害'
-                                : '点击选择一张手牌，展示给火攻使用者看'
-                              }
-                            </div>
-                            <div className="response-notice-buttons">
-                              <button
-                                className="action-btn btn-confirm"
-                                onClick={() => {
-                                  if (selectedResponseCard) {
-                                    respondToAttack(selectedResponseCard);
-                                    setSelectedResponseCard(null);
-                                  }
-                                }}
-                                disabled={!selectedResponseCard}
-                              >
-                                确定展示
-                              </button>
-                            </div>
-                          </>
-                        );
-                      }
-
-                      // 第二阶段：火攻使用者选择是否弃牌
-                      if (isSource && !isWaitingForTarget) {
-                        return (
-                          <>
-                            <div className="response-notice-text">
-                              【火攻】{isSelfFireAttack ? '你' : '目标'}展示了 <span style={{ color: '#ff5722' }}>{shownCard?.suit}{shownCard?.number} {shownCard?.name}</span>
-                            </div>
-                            <div className="response-notice-hint">
-                              {hasSameSuit 
-                                ? `请弃置一张${shownCard?.suit}花色的手牌，${isSelfFireAttack ? '对自己' : '对目标'}造成1点火焰伤害`
-                                : '你没有同花色的手牌，无法造成伤害'
-                              }
-                            </div>
-                            <div className="response-notice-buttons">
-                              <button
-                                className="action-btn btn-confirm"
-                                onClick={() => {
-                                  if (selectedResponseCard) {
-                                    respondToAttack(selectedResponseCard);
-                                    setSelectedResponseCard(null);
-                                  }
-                                }}
-                                disabled={!selectedResponseCard}
-                              >
-                                确定
-                              </button>
-                              <button
-                                className="action-btn btn-cancel"
-                                onClick={() => {
-                                  setSelectedResponseCard(null);
-                                  respondToAttack();
-                                }}
-                              >
-                                取消
-                              </button>
-                            </div>
-                          </>
-                        );
-                      }
-
-                      // 等待状态
-                      return (
-                        <div className="response-notice-text">
-                          {isWaitingForTarget 
-                            ? `等待目标选择展示牌...`
-                            : `等待 ${gameState.players.find(p => p.id === fireAttackState?.sourceId)?.character.name} 决策【火攻】...`
-                          }
-                        </div>
-                      );
-                    })()}
+                {/* 计时器 - 移到底部 */}
+                {isTimerRunning && !isPaused && (
+                  <div className="timer-container">
+                    <div className="timer-bar-wrapper">
+                      <div className="timer-bar" style={{ width: `${(timeLeft / maxTime) * 100}%` }} />
+                    </div>
+                    <span className="timer-text">{timeLeft}s</span>
                   </div>
                 )}
 
@@ -1856,58 +1825,58 @@ export const GameBoard: React.FC = () => {
                     </div>
                   </div>
                 )}
-              </div>
 
-              {/* 濒死阶段提示 - 体力降至0时需要使用桃或酒自救 */}
-              {gameState.phase === GamePhase.DYING && gameState.dyingState && (
-                <div className="dying-simple-panel">
-                  {gameState.dyingState.playerId === humanPlayer.id ? (
-                    // 当前玩家濒死，需要自救
-                    <>
-                      <div className="dying-simple-text">
-                        已进入濒死状态，需要一个【桃】或【酒】来自救
-                      </div>
-                      <div className="dying-simple-buttons">
-                        <button
-                          className="dying-btn dying-btn-confirm"
-                          onClick={() => {
-                            if (selectedDyingCard) {
-                              const card = humanPlayer.handCards.find(c => c.id === selectedDyingCard);
-                              if (card) {
-                                if (card.name === BasicCardName.PEACH) {
-                                  handleDyingResponse('peach');
-                                } else if (card.name === BasicCardName.WINE) {
-                                  handleDyingResponse('wine');
+                {/* 濒死阶段提示 - 体力降至0时需要使用桃或酒自救 */}
+                {gameState.phase === GamePhase.DYING && gameState.dyingState && (
+                  <div className="dying-simple-panel">
+                    {gameState.dyingState.playerId === humanPlayer.id ? (
+                      // 当前玩家濒死，需要自救
+                      <>
+                        <div className="dying-simple-text">
+                          已进入濒死状态，需要一个【桃】或【酒】来自救
+                        </div>
+                        <div className="dying-simple-buttons">
+                          <button
+                            className="dying-btn dying-btn-confirm"
+                            onClick={() => {
+                              if (selectedDyingCard) {
+                                const card = humanPlayer.handCards.find(c => c.id === selectedDyingCard);
+                                if (card) {
+                                  if (card.name === BasicCardName.PEACH) {
+                                    handleDyingResponse('peach');
+                                  } else if (card.name === BasicCardName.WINE) {
+                                    handleDyingResponse('wine');
+                                  }
+                                  setSelectedDyingCard(null);
                                 }
-                                setSelectedDyingCard(null);
                               }
-                            }
-                          }}
-                          disabled={!selectedDyingCard}
-                        >
-                          确定
-                        </button>
-                        <button
-                          className="dying-btn dying-btn-cancel"
-                          onClick={() => {
-                            // 放弃自救，角色死亡
-                            giveUpDying();
-                            setSelectedDyingCard(null);
-                            selectCard(null);
-                          }}
-                        >
-                          取消
-                        </button>
+                            }}
+                            disabled={!selectedDyingCard}
+                          >
+                            确定
+                          </button>
+                          <button
+                            className="dying-btn dying-btn-cancel"
+                            onClick={() => {
+                              // 放弃自救，角色死亡
+                              giveUpDying();
+                              setSelectedDyingCard(null);
+                              selectCard(null);
+                            }}
+                          >
+                            取消
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      // 等待其他玩家濒死自救
+                      <div className="dying-simple-text">
+                        等待 {gameState.players.find(p => p.id === gameState.dyingState?.playerId)?.character.name} 进行濒死自救...
                       </div>
-                    </>
-                  ) : (
-                    // 等待其他玩家濒死自救
-                    <div className="dying-simple-text">
-                      等待 {gameState.players.find(p => p.id === gameState.dyingState?.playerId)?.character.name} 进行濒死自救...
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* 手牌区域 - 使用自适应堆叠算法 */}
               <HandCards
