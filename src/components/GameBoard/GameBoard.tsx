@@ -5,6 +5,7 @@ import { PlayerAvatar } from '../PlayerAvatar/PlayerAvatar';
 import { HandCards } from '../HandCards/HandCards';
 import { DebugSetup, DebugConfig } from '../DebugSetup/DebugSetup';
 import { ResponseNotice, WaitingNotice } from './ResponseNotice';
+import { PlayedCardsArea, PlayedCardInfo } from '../PlayedCardsArea/PlayedCardsArea';
 import { GamePhase, Identity, CardType, CardSuit, CardColor, SpellCardName, BasicCardName, ResponseType, Card as GameCard, PendingResponse } from '../../types/game';
 import { DistanceCalculator } from '../../game/DistanceCalculator';
 import './GameBoard.css';
@@ -19,17 +20,6 @@ interface CardAnimation {
   targetPlayerIds: string[];  // 支持多目标
   cardName: string;
   timestamp: number;
-}
-
-// 出牌显示信息
-interface PlayedCardInfo {
-  id: string;
-  card: GameCard;
-  playerName: string;
-  targetName?: string;
-  timestamp: number;
-  isFireAttackShown?: boolean; // 是否为火攻展示牌
-  isStolenCard?: boolean; // 是否为被偷的牌（用于反馈等技能动画）
 }
 
 // 花色显示
@@ -1359,54 +1349,7 @@ export const GameBoard: React.FC = () => {
         )}
 
         {/* 出牌显示区域 */}
-        <div className="played-cards-area">
-          {playedCards.filter(item => !item.isFireAttackShown).map((item, index) => (
-            <div
-              key={item.id}
-              className="played-card-item"
-              style={{
-                transform: `translateX(${index * 90}px)`,
-                zIndex: playedCards.length - index,
-              }}
-            >
-              <div className="played-card-wrapper">
-                <Card
-                  card={item.card}
-                  isDisabled={true}
-                  showDescription={false}
-                />
-                <div className="played-card-label">
-                  <span className="played-card-player">{item.playerName}</span>
-                  {item.targetName && (
-                    <>
-                      <span className="played-card-arrow">→</span>
-                      <span className="played-card-target">{item.targetName}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* 火攻展示牌（单独渲染在屏幕中央） */}
-        {playedCards.filter(item => item.isFireAttackShown).map((item) => (
-          <div
-            key={item.id}
-            className="played-card-item fire-attack-shown"
-          >
-            <div className="played-card-wrapper fire-attack-wrapper">
-              <Card
-                card={item.card}
-                isDisabled={true}
-                showDescription={false}
-              />
-              <div className="played-card-label fire-attack-label">
-                <span className="played-card-player">{item.playerName}</span>
-              </div>
-            </div>
-          </div>
-        ))}
+        <PlayedCardsArea playedCards={playedCards} />
 
         {/* 手牌消失动画区域（用于反馈等技能） */}
         <div className="disappearing-cards-area">

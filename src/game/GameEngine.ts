@@ -2249,14 +2249,7 @@ export class GameEngine {
     if (success) {
       // 对于锦囊牌（需要无懈可击响应的），不在这里发送通知
       // 因为详细日志会在 executeSpellEffect 中发送
-      if (isSpellCard) {
-        // 只更新状态，不发送日志通知
-        this.actionListeners.forEach(listener => listener({
-          ...action,
-          cardName: cardName,
-          isEffectResult: true, // 标记为效果结果，避免生成额外日志
-        }));
-      } else {
+      if (!isSpellCard) {
         // 补充 cardName 和日志消息到 action 中
         const actionWithCardName: ActionRequest = {
           ...action,
@@ -2265,6 +2258,7 @@ export class GameEngine {
         };
         this.actionListeners.forEach(listener => listener(actionWithCardName));
       }
+      // 锦囊牌的通知由 executeSpellEffect 统一发送，避免重复
     }
 
     return success;

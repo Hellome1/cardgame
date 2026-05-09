@@ -1,0 +1,107 @@
+/* 出牌显示区域 - 位于玩家手牌上方 */
+.played-cards-area {
+  position: fixed;
+  bottom: 280px;
+  left: 200px;
+  z-index: 100;
+  width: 500px;
+  height: 120px;
+  pointer-events: none; /* 不阻挡点击事件 */
+}
+
+/* 出牌卡片项 */
+.played-card-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition: transform 0.3s ease-out, opacity 0.5s ease-out;
+  animation: playedCardAppear 0.3s ease-out; /* 入场动画 */
+}
+
+/* 出牌卡片入场动画 */
+@keyframes playedCardAppear {
+  from {
+    transform: scale(0.8) translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+/* 出牌卡片包装器 */
+.played-card-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* 出牌卡片标签 */
+.played-card-label {
+  margin-top: 5px;
+  font-size: 14px;
+  text-align: center;
+  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #fff;
+}
+
+/* 出牌玩家名称 */
+.played-card-player {
+  color: #4caf50; /* 绿色表示出牌者 */
+  font-weight: bold;
+}
+
+/* 箭头 */
+.played-card-arrow {
+  color: #ffd700; /* 黄色箭头 */
+  margin: 0 4px;
+}
+
+/* 目标玩家名称 */
+.played-card-target {
+  color: #f44336; /* 红色表示目标 */
+  font-weight: bold;
+}
+
+/* 火攻展示牌特殊样式 */
+.fire-attack-shown {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 200;
+  animation: fireAttackAppear 0.5s ease-out;
+}
+
+/* 火攻展示牌入场动画 */
+@keyframes fireAttackAppear {
+  from {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* 火攻展示牌包装器 */
+.fire-attack-wrapper {
+  border: 3px solid #ff5722;
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.8);
+  box-shadow: 0 0 20px rgba(255, 87, 34, 0.6);
+}
+
+/* 火攻展示牌标签 */
+.fire-attack-label {
+  margin-top: 10px;
+  font-size: 16px;
+  background: rgba(255, 87, 34, 0.3);
+  border: 1px solid #ff5722;
+}
