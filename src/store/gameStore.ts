@@ -600,8 +600,47 @@ export const useGameStore = create<GameStore>((set, get) => ({
         // 检查是否还在响应阶段（可能已经被处理了）
         const currentState = get().gameState;
         if (currentState?.phase === 'response' && currentState?.pendingResponse) {
-          console.log('响应阶段超时，视为放弃操作');
-          get().respondToAttack();
+          const pendingResponse = currentState.pendingResponse;
+          
+          // 火攻特殊处理
+          if (pendingResponse.request.responseType === ResponseType.FIRE_ATTACK && pendingResponse.fireAttackState) {
+            const { waitingForTarget, targetId, sourceId } = pendingResponse.fireAttackState;
+            
+            if (waitingForTarget) {
+              // 火攻第一阶段超时：目标未亮牌，由AI自动选择一张牌亮出
+              console.log('火攻第一阶段超时，目标未选择亮牌，由AI自动选择');
+              const targetPlayer = currentState.players.find(p => p.id === targetId);
+              if (targetPlayer && targetPlayer.handCards.length > 0) {
+                // AI自动选择第一张手牌亮出
+                const autoSelectedCard = targetPlayer.handCards[0];
+                console.log(`AI自动为 ${targetPlayer.character.name} 选择展示【${autoSelectedCard.name}】`);
+                engine.handleFireAttackTargetSelect(targetId, autoSelectedCard.id);
+                // 更新游戏状态
+                set({ gameState: engine.getState() });
+                
+                // 为火攻使用者启动新的计时器（第二阶段）
+                setTimeout(() => {
+                  const updatedState = get().gameState;
+                  if (updatedState?.phase === 'response' && 
+                      updatedState?.pendingResponse?.request.responseType === ResponseType.FIRE_ATTACK &&
+                      !updatedState?.pendingResponse?.fireAttackState?.waitingForTarget) {
+                    console.log('火攻第二阶段：为火攻使用者启动计时器');
+                    get().startTimer(8);
+                  }
+                }, 500);
+              }
+            } else {
+              // 火攻第二阶段超时：火攻使用者未选择弃牌，视为放弃
+              console.log('火攻第二阶段超时，火攻使用者未选择弃牌，视为放弃');
+              engine.respondToFireAttack(sourceId);
+              // 更新游戏状态
+              set({ gameState: engine.getState() });
+            }
+          } else {
+            // 其他响应阶段超时，视为放弃操作
+            console.log('响应阶段超时，视为放弃操作');
+            get().respondToAttack();
+          }
         } else {
           console.log('响应阶段已结束，无需处理超时');
         }

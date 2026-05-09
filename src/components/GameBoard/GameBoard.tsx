@@ -317,9 +317,11 @@ export const GameBoard: React.FC = () => {
       if (gameState.phase === GamePhase.DISCARD) {
         timeLimit = 15; // 弃牌阶段15秒
       } else if (isResponsePhase) {
-        // 无懈可击响应8秒，其他响应10秒
-        const isNullifyResponse = gameState.pendingResponse?.request.responseType === ResponseType.NULLIFY;
-        timeLimit = isNullifyResponse ? 8 : 10;
+        // 无懈可击响应8秒，火攻响应8秒，其他响应10秒
+        const responseType = gameState.pendingResponse?.request.responseType;
+        const isNullifyResponse = responseType === ResponseType.NULLIFY;
+        const isFireAttackResponse = responseType === ResponseType.FIRE_ATTACK;
+        timeLimit = isNullifyResponse || isFireAttackResponse ? 8 : 10;
       } else if (isDyingPhase) {
         // 濒死阶段10秒
         timeLimit = 10;
@@ -453,6 +455,7 @@ export const GameBoard: React.FC = () => {
             }, 3000);
           }
         }
+
       }
 
       // 处理技能动作（如司马懿的反馈）
@@ -507,16 +510,23 @@ export const GameBoard: React.FC = () => {
         if (gameState) {
           const target = gameState.players.find(p => p.id === action.targetIds?.[0]);
           if (target) {
+            // 生成唯一 id，确保不重复
+            const cardId = action.fireAttackShownCard.id;
             const shownCardInfo: PlayedCardInfo = {
-              id: `fire_attack_shown_${Date.now()}`,
+              id: `fire_attack_shown_${cardId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
               card: action.fireAttackShownCard,
               playerName: `${target.character.name}展示`,
               timestamp: Date.now(),
               isFireAttackShown: true, // 标记为火攻展示牌
             };
             console.log('[GameBoard] 添加火攻展示牌到 playedCards:', shownCardInfo);
-            // 添加展示牌到列表开头
+            // 检查是否已存在相同的火攻展示牌（根据卡牌 id 判断）
             setPlayedCards(prev => {
+              const existingCard = prev.find(c => c.isFireAttackShown && c.card.id === cardId);
+              if (existingCard) {
+                console.log('[GameBoard] 火攻展示牌已存在，跳过添加');
+                return prev;
+              }
               const newCards = [shownCardInfo, ...prev].slice(0, 5);
               console.log('[GameBoard] 更新后的 playedCards:', newCards);
               return newCards;

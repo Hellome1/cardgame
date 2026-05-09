@@ -1263,7 +1263,7 @@ export class GameEngine {
           targetIds: [fireTarget.id],
           logMessage,
           isEffectResult: true,
-        }));
+        } as ActionRequest));
 
         // 如果是AI目标，自动选择一张手牌展示
         // 自己火攻自己时，如果是AI则自动选择，如果是人类玩家则等待手动选择
@@ -2947,6 +2947,17 @@ export class GameEngine {
     // 如果是AI使用，自动选择
     if (sourcePlayer.isAI) {
       this.processAIFireAttackResponse(sourcePlayer, selectedCard.suit);
+    } else {
+      // 如果是人类使用，通知前端启动计时器
+      this.actionListeners.forEach(listener => listener({
+        action: GameAction.PLAY_CARD,
+        playerId: sourcePlayer.id,
+        cardName: '火攻',
+        targetIds: [targetId],
+        logMessage: `${targetPlayer.character.name} 展示了 [${selectedCard.suit}${selectedCard.number} ${selectedCard.name}]，${sourcePlayer.character.name} 可选择弃置同花色手牌造成火焰伤害`,
+        isEffectResult: true,
+        fireAttackShownCard: selectedCard,
+      } as ActionRequest));
     }
 
     return true;
