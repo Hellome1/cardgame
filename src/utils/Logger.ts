@@ -77,10 +77,8 @@ class Logger {
       // 监听牌堆状态更新事件
       window.addEventListener('deck-state-update', ((event: CustomEvent) => {
         const detail = event.detail;
-        console.log('[Logger event] deck-state-update detail:', detail);
         if (detail && typeof detail === 'object') {
           const { reason, cards, previousCount, changedCards } = detail;
-          console.log('[Logger event] changedCards:', changedCards);
           if (cards && Array.isArray(cards)) {
             this.saveDeckState(reason || '牌堆更新', cards, previousCount, changedCards);
           }
@@ -202,7 +200,6 @@ class Logger {
         equipmentType: card.equipmentType,
         range: card.range
       }));
-      console.log('[Logger.saveDeckState] serializedChangedCards:', serializedChangedCards);
       await this.ipcRenderer.invoke('save-deck-state', { reason, cards, previousCount, changedCards: serializedChangedCards });
     } catch (e) {
       // 静默失败
@@ -226,7 +223,6 @@ class Logger {
         equipmentType: card.equipmentType,
         range: card.range
       }));
-      console.log('[Logger.saveDiscardPileState] serializedChangedCards:', serializedChangedCards);
       await this.ipcRenderer.invoke('save-discard-pile-state', { reason, cards, previousCount, changedCards: serializedChangedCards });
     } catch (e) {
       // 静默失败

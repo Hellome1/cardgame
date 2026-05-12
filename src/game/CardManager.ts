@@ -58,37 +58,9 @@ export class CardManager {
     // 根据配置创建卡牌
     const deck: Card[] = fullDeckConfig.map(config => this.createCardFromConfig(config));
 
-    // 如果是静默模式，直接返回洗牌后的牌堆，不记录日志
-    if (silent) {
-      return this.shuffle(deck);
-    }
-
-    // 记录初始牌堆（创建后、洗牌前）
-    console.log(`[牌堆] 创建完成，共 ${deck.length} 张牌`);
-    console.log('[牌堆] 各类型数量统计:');
-    const basicCount = deck.filter(c => c.type === CardType.BASIC).length;
-    const spellCount = deck.filter(c => c.type === CardType.SPELL).length;
-    const equipCount = deck.filter(c => c.type === CardType.EQUIPMENT).length;
-    console.log(`  - 基本牌: ${basicCount} 张`);
-    console.log(`  - 锦囊牌: ${spellCount} 张`);
-    console.log(`  - 装备牌: ${equipCount} 张`);
-
-    // 记录完整的初始牌堆（洗牌前）
-    console.log('[牌堆] 初始牌堆内容（洗牌前，按创建顺序）:');
-    deck.forEach((card, index) => {
-      console.log(`  ${index + 1}. ${card.name} [${card.suit}${card.number}] (${card.type}) - ID: ${card.id}`);
-    });
-
     const shuffledDeck = this.shuffle(deck);
 
-    // 记录洗牌后的牌堆
-    console.log('[牌堆] 洗牌完成');
-    console.log('[牌堆] 洗牌后牌堆内容（顶部到底部）:');
-    shuffledDeck.forEach((card, index) => {
-      console.log(`  ${index + 1}. ${card.name} [${card.suit}${card.number}] (${card.type}) - ID: ${card.id}`);
-    });
-
-    // 触发牌堆日志记录
+    // 触发牌堆日志记录（通过回调保存到专门的日志文件，不打印到控制台）
     logDeckState('牌堆创建完成-洗牌后', shuffledDeck);
 
     return shuffledDeck;

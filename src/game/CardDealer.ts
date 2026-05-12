@@ -166,13 +166,7 @@ export class CardDealer {
     console.log(`[发牌系统] 共发出 ${allDealtCards.length} 张牌`);
     console.log(`[发牌系统] 牌堆剩余 ${this.deck.length} 张牌`);
 
-    // 打印最终牌堆状态
-    console.log('[发牌系统] 最终牌堆内容（顶部到底部）:');
-    this.deck.forEach((card, index) => {
-      console.log(`  ${index + 1}. ${card.name} [${card.suit}${card.number}] (${card.type}) - ID: ${card.id}`);
-    });
-
-    // 注意：最终牌堆日志由调用方（GameEngine）统一记录，避免重复
+    // 注意：详细牌堆日志通过 deck-state-update 事件保存到专门的日志文件，不打印到控制台
   }
 
   /**

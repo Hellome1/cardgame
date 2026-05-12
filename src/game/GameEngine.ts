@@ -133,15 +133,6 @@ export class GameEngine {
     // 创建牌堆
     const deck = this.cardManager.createStandardDeck();
 
-    // 打印完整牌堆到日志（用于复盘）
-    console.log('========== 初始牌堆 ==========');
-    console.log(`牌堆总数: ${deck.length} 张`);
-    console.log('牌堆内容（按顺序）:');
-    deck.forEach((card, index) => {
-      console.log(`${index + 1}. ${card.name} [${card.suit}${card.number}] (${card.type})`);
-    });
-    console.log('==============================');
-
     // 创建临时状态以便记录初始牌堆（发牌前）
     const tempState: GameState = {
       players: [],
